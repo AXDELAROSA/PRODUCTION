@@ -1,0 +1,54 @@
+
+SELECT * FROM [DATA_02].[DBO].ccprdstr_sql WHERE ITEM_NO = 'PMWCFBRWLNPT5'    AND modelno = 'WC1' AND versionno=8
+
+SELECT * FROM [DATA_02].[DBO].ccprdstr_sql WHERE ITEM_NO = 'PMWGARMCNPDX9'    AND modelno = 'WKG' AND versionno=24
+
+
+SELECT * FROM [DATA_02].[DBO].ccitmidx_sql WHERE LEN(user_def_fld_4) = 3
+--ITEM_NO IN (SELECT COMP_ITEM_NO FROM [DATA_02].[DBO].ccprdstr_sql WHERE ITEM_NO = 'PMWCFBRWLNPT5'    AND modelno = 'WC1' AND versionno=8)  AND modelno = 'WC1' AND versionno=8
+
+--    ES EL ORDEN CORRECTO DE LOS SPECIAL PROCESS
+--    PERFO03 + SHAVE01 + EMBOS06 + LAMIN02 + RECUT04 + QULTN05 + SHAVE07 + LAMIN08 + LAMIN09 + PERFO10 + LAMIN11 + LAMIN12 + LAMIN13 + QULTN14 + ENESPERAUSO
+
+	SELECT	JOBNO, 
+			-- ===========================
+			LTRIM(RTRIM(ccjoblin_sql.kit))			AS KIT, 
+			LTRIM(RTRIM(ccjoblin_sql.kitdesc))		AS KIT_DESC, 
+			CONVERT(INT,ccjoblin_sql.originalqty)	AS ORIGINAL_QTY, 
+			LTRIM(RTRIM(ccjoblin_sql.customer))		AS CUSTOMER, 
+			ccjoblin_sql.item_no					AS ITEM_NO,
+			ccjoblin_sql.Ser_No						AS SER_NO,
+			ccjoblin_sql.ChangeLevel				AS CHANGELEVEL,
+			-- ===========================
+			LTRIM(RTRIM(cccusitm_sql.cus_item_no))	AS CUS_ITEM_NO,
+			LTRIM(RTRIM(cccusitm_sql.modelno))		AS MODELNO,
+			LTRIM(RTRIM(cccusitm_sql.versionno))	AS VERSIONNO
+			-- ===========================
+	FROM ccjoblin_sql  (NOLOCK)
+	-- ===========================
+	INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
+	AND		ccjoblin_sql.customer = cccusitm_sql.cus_no
+	AND		cccusitm_sql.versionno = (	SELECT	MAX(CONVERT(INT, versionno)) 
+													FROM	cccusitm_sql (NOLOCK)
+													WHERE	cccusitm_sql.Item_No = ccjoblin_sql.item_no  
+													AND		cccusitm_sql.cus_no = ccjoblin_sql.customer)
+	-- ===========================
+
+	WHERE	ccjoblin_sql.jobno = 31503
+	-- ===========================
+    ORDER BY ccjoblin_sql.jobno, SER_NO
+		
+	SELECT * FROM [DATA_02].[DBO].ccitmidx_sql
+	INNER JOIN [DATA_02].[DBO].ccprdstr_sql ON ccitmidx_sql.ITEM_NO = ccprdstr_sql.comp_item_no
+		AND ccitmidx_sql.modelno = ccprdstr_sql.modelno AND ccitmidx_sql.versionno = ccprdstr_sql.versionno 
+	WHERE ccprdstr_sql.ITEM_NO = 'PMWDZBRCNPDX9'    AND ccprdstr_sql.modelno = 'WKZ' AND ccprdstr_sql.versionno='005' 
+
+	--PMWGARMCNPDX9  
+	--PMWGLK4CNPDX9  
+	--PMWGLK6CNPDX9  
+	--PMWGLH4CNPDX9  
+	--PWG2RC6CNPDX9  
+	--PMWGLFCCNPDX9  
+	--PMWGLFCCNPDX9  
+	--PMJYFBRCNPDX9  
+	--PMJYFBLCNPDX9  
