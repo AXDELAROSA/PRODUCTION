@@ -132,22 +132,22 @@ SET NOCOUNT ON
 --	CLASE CORTE
 EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 10	,'MATERIALES'					, 'MATER'									, 10, '', 1		, 10
 EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 20	,'EN CORTE'						, 'CORTE'									, 20, '', 1		, 10
-EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 30	,'TERMINO CORTE / LIBERACIÓN'	, 'CRTE-LIBER'								, 30, '', 1		, 10
+EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 30	,'TERMINO CORTE / LIBERACIÓN'	, 'CRTE-LIBER'								, 30, '', 0		, 10
 
 --	CLASE MEDIO_PROCESO
 EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 200	,'SKIVING'						, 'SIVIN'									, 200, '', 1	, 20
 EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 210	,'RECUT'						, 'RECUT'									, 210, '', 1	, 20
-EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 220	,'PERFORACIÓN'					, 'PERFO'									, 220, '', 1	, 20
-EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 230	,'LAMINACIÓN'					, 'LAMIN'									, 230, '', 1	, 20
+EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 220	,'LAMINACION'					, 'LAMIN'									, 220, '', 1	, 20
+EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 230	,'PERFORACION'					, 'PERFO'									, 230, '', 1	, 20
 EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 240	,'QUILTING'						, 'QUILT'									, 240, '', 1	, 20
 EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 250	,'EMBOSSING'					, 'EMBOS'									, 250, '', 1	, 20
 --------------------------------------------------------------------------------------------------------------------------------------------
-EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 300	,'INSPECCIÓN PERFORACIÓN'		, 'INSP-PERFO'								, 300, '', 1	, 25
+EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 300	,'INSP. PERFO.'					, 'INSP-PERFO'								, 300, '', 1	, 25
 
 --	CLASE FINAL
-EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 400	,'CERTIFICACIÓN'				, 'CERTIF'									, 400, '', 1	, 30
-EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 410	,'LIBERACIÓN QC'				, 'QC-LIBER'								, 410, '', 1	, 30
-EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 420	,'PRODUCTO TERMINADO'			, 'PROD-TERMI'								, 420, '', 1	, 30
+EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 400	,'CERTIFICACION'				, 'CERTIF'									, 400, '', 1	, 30
+EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 410	,'LIBERACION QC'				, 'QC-LIBER'								, 410, '', 1	, 30
+EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 420	,'MFP'			,				'PROD-TERMI'								, 420, '', 1	, 30
 EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 430	,'EMBARCADO'					, 'EMBAR'									, 430, '', 1	, 30
 EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 440	,'FACTURADO'					, 'FACTUR'									, 440, '', 1	, 30
 
