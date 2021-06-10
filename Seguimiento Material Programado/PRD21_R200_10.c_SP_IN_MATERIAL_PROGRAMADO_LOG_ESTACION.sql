@@ -24,7 +24,7 @@ IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_PR_
 GO
 
 /*
-	 EXEC [PG_PR_GUARDAR_MATERIAL_PROGRAMADO_LOG] 0 ,144, 'PERFORACION' , 'PERFORACION-001' , 13367 , 'RUWLDLFWLROTX7,Q15-S32629001~32630*200766DTX7%MAGN02#WDL@1!2' 
+	 EXEC [PG_PR_GUARDAR_MATERIAL_PROGRAMADO_LOG] 0 ,144, 'LAMINACION' , 'LAMINACION-001' , 13367 , 'rpwldfclwlcpx7,q30-s32629004*200769ctx7%magn02#wdl@1' , 0 
 */
 
 CREATE PROCEDURE [dbo].[PG_PR_GUARDAR_MATERIAL_PROGRAMADO_LOG]
@@ -34,10 +34,11 @@ CREATE PROCEDURE [dbo].[PG_PR_GUARDAR_MATERIAL_PROGRAMADO_LOG]
 	@PP_USUARIO_EVENTO			VARCHAR(100),
 	@PP_ESTACION				VARCHAR(100),
 	@PP_K_RESPONSABLE			INT,
-	@PP_CODIGO_ETIQUETA			VARCHAR(150)
+	@PP_CODIGO_ETIQUETA			VARCHAR(150),
+	@AUTORIZAR_EVENTO_DIFERENTE INT = 0
 AS
 
-	-- ///////////////////////////////////////////
+	-- ///////SE DECLARAN VARIABLES A USARSE////////////////////////////////////
 	DECLARE @VP_MENSAJE	VARCHAR(255) = ''
 	DECLARE @VP_PART_NO				VARCHAR(50) = '' 
 	DECLARE @VP_QTY					VARCHAR(50) = '' 
@@ -50,9 +51,34 @@ AS
 	DECLARE @VP_LOTE_2				VARCHAR(50) = '' 
 	DECLARE @VP_TIPO_EVENTO			INT = 0
 
+	-- ///////SE OBTIENE EL ID DEL EVENTO EN BASE AL USUARIO EVENTO////////////////////////////////////
+	DECLARE @VP_TIPO_EVENTO_KIT INT = 0
+	IF @PP_USUARIO_EVENTO = 'SKIVING'
+		SET @VP_TIPO_EVENTO_KIT = 200
+
+	IF @PP_USUARIO_EVENTO = 'RECUT'
+		SET @VP_TIPO_EVENTO_KIT = 210
+
+	IF @PP_USUARIO_EVENTO = 'LAMINACION'
+		SET @VP_TIPO_EVENTO_KIT = 220
+
+	IF @PP_USUARIO_EVENTO = 'PERFORACION'
+		SET @VP_TIPO_EVENTO_KIT = 230
+
+	IF @PP_USUARIO_EVENTO = 'QUILTING'
+		SET @VP_TIPO_EVENTO_KIT = 240
+
+	IF @PP_USUARIO_EVENTO = 'EMBOSSING'
+		SET @VP_TIPO_EVENTO_KIT = 250
+
+
 	-- // SECCION#1 /////////////////////////////////////////////////////////// VALIDACIONES + REGLAS DE NEGOCIO 	
-	IF @PP_CODIGO_ETIQUETA = ''
-		SET @VP_MENSAJE = 'No se obtuvieron datos de la etiqueta'
+	IF @VP_TIPO_EVENTO_KIT = 0
+		SET @VP_MENSAJE = 'Estación no valida.'
+	
+	IF @VP_MENSAJE = ''
+		IF @PP_CODIGO_ETIQUETA = ''
+			SET @VP_MENSAJE = 'No se obtuvieron datos de la etiqueta.'
 
 	IF @VP_MENSAJE = ''
 		IF LEN(@PP_CODIGO_ETIQUETA) < 30
@@ -62,12 +88,11 @@ AS
 		BEGIN
 			DECLARE @VP_N_RELOJ_EXISTE INT = 0
 			SELECT @VP_N_RELOJ_EXISTE = COUNT(EN_NUM_EMP) 
-			FROM HOWE.dbo.VISTA_GAFETES 
+			FROM HOWE.dbo.VISTA_GAFETES (NOLOCK)
 			WHERE EN_NUM_EMP = @PP_K_RESPONSABLE
 
 			IF @VP_N_RELOJ_EXISTE IS NULL OR @VP_N_RELOJ_EXISTE = 0
-				SET @VP_MENSAJE = 'Numero de Reloj no valido'
-
+				SET @VP_MENSAJE = 'Numero de Reloj no valido.'
 		END
 
 	-- //////////////////////////////////////////////////////////////
@@ -75,9 +100,9 @@ AS
 		BEGIN
 			BEGIN TRANSACTION 
 			BEGIN TRY
-
-				SET @PP_CODIGO_ETIQUETA = UPPER(@PP_CODIGO_ETIQUETA)
 				-- ///////SE OBTIENEN LOS DATOS DEL CODIGO DE LA ETIQUETA//////////////////////////////////////////////
+				DECLARE @VP_MENSAJE_TRANSACCION VARCHAR(255)= ''
+				SET @PP_CODIGO_ETIQUETA = UPPER(@PP_CODIGO_ETIQUETA)
 				EXECUTE [dbo].[PG_GET_DATO_ETIQUETA_KIT]	@PP_K_SISTEMA_EXE, @PP_K_USUARIO_ACCION,
 															@PP_CODIGO_ETIQUETA,
 															@OU_PART_NO		 =	@VP_PART_NO			OUTPUT,
@@ -88,53 +113,96 @@ AS
 															@OU_CLIENTE		 =  @VP_CLIENTE			OUTPUT,
 															@OU_PRODUCT_CAT	 =  @VP_PRODUCT_CAT 	OUTPUT,
 															@OU_LOTE_1		 =  @VP_LOTE_1			OUTPUT,
-															@OU_LOTE_2		 =  @VP_LOTE_2			OUTPUT				
-			
-				-- ///////SE GUARDA EL REGISTRO DEL MATERIAL ESCANEADO//////////////////////////////////////////////	
-				--	CLASE MEDIO_PROCESO		
-				------------------------------------------------------------------------------------------------
-				--EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 300	,'INSP. PERFO.'					, 'INSP-PERFO'		
-				--EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 400	,'CERTIFICACION'				, 'CERTIF'				
-				--EXECUTE [dbo].[PG_CI_KIT_RUTA_EVENTO] 410	,'LIBERACION QC'				, 'QC-LIBER'				
+															@OU_LOTE_2		 =  @VP_LOTE_2			OUTPUT	
+																		
+				IF (@VP_PART_NO = '' OR @VP_QTY = '' OR  @VP_SERIAL_1 = '' OR @VP_CUSTNO = '' OR @VP_CLIENTE = '' OR @VP_PRODUCT_CAT = '' OR @VP_LOTE_1 = '')
+					RAISERROR ('Los datos obtenidos de la etiqueta son incorrectos.', 16, 1 ) --MENSAJE - Severity -State.
 
-				DECLARE @VP_TIPO_EVENTO_KIT INT = 0
-				IF @PP_USUARIO_EVENTO = 'SKIVING'
-					SET @VP_TIPO_EVENTO_KIT = 200
+				-- ///////SE OBTIENEN LOS DATOS DEL KIT PROGRAMADO//////////////////////////////////////////////
+				DECLARE @VP_ITEM_NO_PROGRAMADO VARCHAR(100) = ''
+				DECLARE @VP_VERSION VARCHAR(100) = ''
+				SELECT	@VP_ITEM_NO_PROGRAMADO = LTRIM(RTRIM(ccjoblin_sql.item_no)),
+						@VP_VERSION = LTRIM(RTRIM(cccusitm_sql.versionno))
+						-- ===========================
+				FROM ccjoblin_sql  (NOLOCK)
+				INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
+				AND		ccjoblin_sql.customer = cccusitm_sql.cus_no
+				AND		cccusitm_sql.versionno = (	SELECT	MAX(CONVERT(INT, versionno)) 
+																FROM	cccusitm_sql (NOLOCK)
+																WHERE	cccusitm_sql.Item_No = ccjoblin_sql.item_no  
+																AND		cccusitm_sql.cus_no = ccjoblin_sql.customer)
+				-- ===========================
+				WHERE	 LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ LTRIM(RTRIM(ser_no)),3) = @VP_SERIAL_1
 
-				IF @PP_USUARIO_EVENTO = 'RECUT'
-					SET @VP_TIPO_EVENTO_KIT = 210
+				IF @VP_ITEM_NO_PROGRAMADO IS NULL OR @VP_ITEM_NO_PROGRAMADO = ''
+					RAISERROR ('No fue posible obtener el Kit del serial en [ccjoblin_sql].', 16, 1 ) --MENSAJE - Severity -State.
 
-				IF @PP_USUARIO_EVENTO = 'LAMINACION'
-					SET @VP_TIPO_EVENTO_KIT = 220
+				IF @VP_ITEM_NO_PROGRAMADO <> @VP_PART_NO
+					IF SUBSTRING(@VP_PART_NO, 1, 1) <> 'U'
+						RAISERROR ('El kit programado en la orden es diferente al kit de la etiqueta escaneada.', 16, 1 ) --MENSAJE - Severity -State.
 
-				IF @PP_USUARIO_EVENTO = 'PERFORACION'
-					SET @VP_TIPO_EVENTO_KIT = 230
+				-- ///////SE VERIFICA QUE EL EVENTO QUE SE ESTA REALIZANDO ESTE DENTRO DE LA RUTA DEL KIT//////////////////////////////////////////////
+				DECLARE @VP_N_KIT_RUTA_EVENTO INT = 0
+				SELECT @VP_N_KIT_RUTA_EVENTO =  COUNT(K_KIT_RUTA)
+				FROM KIT_RUTA (NOLOCK)
+				WHERE ITEM_NO = @VP_PART_NO
+				AND MODELNO = @VP_PRODUCT_CAT
+				AND VERSIONNO = @VP_VERSION
+				AND K_KIT_RUTA_EVENTO =  @VP_TIPO_EVENTO_KIT
 
-				IF @PP_USUARIO_EVENTO = 'QUILTING'
-					SET @VP_TIPO_EVENTO_KIT = 240
+				IF ( @VP_N_KIT_RUTA_EVENTO IS NULL OR @VP_N_KIT_RUTA_EVENTO = 0 )
+					RAISERROR ('El evento no se encuentra dentro de la ruta del Kit.', 16, 1 ) --MENSAJE - Severity -State.
+					
+				-- ///////SE OBTIENE EL EVENTO ACTUAL DEL KIT//////////////////////////////////////////////
+				DECLARE @VP_KIT_EVENTO_ACTUAL INT = 0
+				DECLARE @VP_D_KIT_EVENTO_ACTUAL VARCHAR(100) = ''
+				SELECT TOP 1 @VP_KIT_EVENTO_ACTUAL = K_TIPO_EVENTO_KIT,
+							 @VP_D_KIT_EVENTO_ACTUAL = D_KIT_RUTA_EVENTO
+				FROM [MATERIAL_PROGRAMADO_LOG]  (NOLOCK)
+				INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = [MATERIAL_PROGRAMADO_LOG].K_TIPO_EVENTO_KIT
+				WHERE SERIAL = @VP_SERIAL_1
+				ORDER BY K_MATERIAL_PROGRAMADO_LOG DESC
 
-				IF @PP_USUARIO_EVENTO = 'EMBOSSING'
-					SET @VP_TIPO_EVENTO_KIT = 250
-									
-				IF @PP_USUARIO_EVENTO = 'INSP_PERFO'
-					SET @VP_TIPO_EVENTO_KIT = 300
+				IF ( @VP_KIT_EVENTO_ACTUAL IS NULL OR @VP_KIT_EVENTO_ACTUAL = 0 )
+					RAISERROR ('No fue posible obtener el evento Actual del kit.', 16, 1 ) --MENSAJE - Severity -State.
 
-				IF @PP_USUARIO_EVENTO = 'CERTIFICACION'
-					SET @VP_TIPO_EVENTO_KIT = 400
+				-- ///////SE OBTIENE EL EVENTO SIGUIENTE DEL KIT//////////////////////////////////////////////
+				DECLARE @VP_KIT_EVENTO_SIGUIENTE INT = 0
+				DECLARE @VP_D_KIT_EVENTO_SIGUIENTE VARCHAR(100) = ''
+				SELECT TOP 1 @VP_KIT_EVENTO_SIGUIENTE =  KIT_RUTA.K_KIT_RUTA_EVENTO,
+							 @VP_D_KIT_EVENTO_SIGUIENTE = D_KIT_RUTA_EVENTO
+				FROM KIT_RUTA (NOLOCK)
+				INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
+				WHERE ITEM_NO = @VP_PART_NO
+				AND MODELNO = @VP_PRODUCT_CAT
+				AND VERSIONNO = @VP_VERSION
+				AND KIT_RUTA.K_KIT_RUTA_EVENTO >  @VP_KIT_EVENTO_ACTUAL
 
-				IF @PP_USUARIO_EVENTO = 'LIBERACION_QC'
-					SET @VP_TIPO_EVENTO_KIT = 410
+				IF ( @VP_KIT_EVENTO_SIGUIENTE IS NULL OR @VP_KIT_EVENTO_SIGUIENTE = 0 )
+					RAISERROR ('No fue posible obtener el evento siguiente del kit.', 16, 1 ) --MENSAJE - Severity -State.
 
-				IF @PP_USUARIO_EVENTO = 'MFP'
-					SET @VP_TIPO_EVENTO_KIT = 420
+				IF @VP_TIPO_EVENTO_KIT > @VP_KIT_EVENTO_SIGUIENTE 
+					IF @AUTORIZAR_EVENTO_DIFERENTE = 0
+						BEGIN
+							SET @VP_MENSAJE_TRANSACCION = 'El kit se encuentra en ' + @VP_D_KIT_EVENTO_ACTUAL + ' y tiene eventos pendientes, autoriza que los eventos anteriores se realizarón?'
+							RAISERROR (@VP_MENSAJE_TRANSACCION, 16, 1 ) --MENSAJE - Severity -State.
+						END
 
-				IF @PP_USUARIO_EVENTO = 'EMBARCADO'
-					SET @VP_TIPO_EVENTO_KIT = 430
-				
-				IF @PP_USUARIO_EVENTO = 'FACTURADO'
-					SET @VP_TIPO_EVENTO_KIT = 440
+				IF @VP_TIPO_EVENTO_KIT < @VP_KIT_EVENTO_ACTUAL 
+					BEGIN
+						DECLARE @VP_D_KIT_EVENTO_ANTERIOR VARCHAR(100) = ''
+						SELECT @VP_D_KIT_EVENTO_ANTERIOR =  D_KIT_RUTA_EVENTO
+						FROM KIT_RUTA_EVENTO (NOLOCK)
+						WHERE K_KIT_RUTA_EVENTO = @VP_TIPO_EVENTO_KIT
 
-				SET @VP_SERIAL_1 = SUBSTRING(@VP_SERIAL_1, 2, LEN(@VP_SERIAL_1))
+						IF @AUTORIZAR_EVENTO_DIFERENTE = 0
+							BEGIN
+								SET @VP_MENSAJE_TRANSACCION = 'El kit se encuentra en ' + @VP_D_KIT_EVENTO_ACTUAL + ', desea regresarlo al evento' + @VP_D_KIT_EVENTO_ANTERIOR + '?'
+								RAISERROR (@VP_MENSAJE_TRANSACCION, 16, 1 ) --MENSAJE - Severity -State.
+							END
+					END
+				-- ///////SE GUARDA EL REGISTRO DEL MATERIAL ESCANEADO//////////////////////////////////////////////			
+				--SET @VP_SERIAL_1 = SUBSTRING(@VP_SERIAL_1, 2, LEN(@VP_SERIAL_1))
 				EXECUTE [dbo].[PG_IN_MATERIAL_PROGRAMADO_LOG]	@PP_K_SISTEMA_EXE, @PP_K_USUARIO_ACCION,
 																@VP_TIPO_EVENTO_KIT, @VP_SERIAL_1, @VP_PART_NO, @PP_USUARIO_EVENTO, 
 																@PP_ESTACION, @PP_K_RESPONSABLE, @PP_CODIGO_ETIQUETA
@@ -147,7 +215,7 @@ AS
 				ROLLBACK TRANSACTION
 				DECLARE @VP_ERROR_TRANS NVARCHAR(4000);
 				SET @VP_ERROR_TRANS = ERROR_MESSAGE() 
-				SET @VP_MENSAJE = 'ERROR: // TRANS: [PG_PR_GUARDAR_MATERIAL_PROGRAMADO_LOG] // ' + @VP_ERROR_TRANS
+				SET @VP_MENSAJE = @VP_ERROR_TRANS
 			END CATCH
 			
 		END
@@ -163,7 +231,7 @@ AS
 		
 		END
 	
-	SELECT	@VP_MENSAJE AS MENSAJE, @PP_USUARIO_EVENTO AS CLAVE
+	SELECT	@VP_MENSAJE AS MENSAJE, @VP_SERIAL_1 AS CLAVE
 	
 	-- //////////////////////////////////////////////////////////////
 

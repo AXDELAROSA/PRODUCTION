@@ -63,9 +63,9 @@ GO
 
 /*
 												  (ORDEN)
- EXEC	[dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN] 0,0, '', '( TODOS )', '( TODOS )'
- EXEC	[dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN] 0,0, '32629', '( TODOS )', '( TODOS )'
- EXEC	[dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN] 0,0, '32630', '( TODOS )', '( TODOS )'
+ EXEC	[dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN] 0,0, '', '( TODOS )', '( TODOS )', '( TODOS )'
+ EXEC	[dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN] 0,0, '32629', '( TODOS )', '( TODOS )', '( TODOS )'
+ EXEC	[dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN] 0,0, '32630', '( TODOS )', '( TODOS )', '( TODOS )'
 */
 
 
@@ -74,16 +74,35 @@ CREATE PROCEDURE [dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN]
 	@PP_K_USUARIO_ACCION			INT,
 	@PP_BUSCAR						VARCHAR(150),
 	@PP_CLIENTE						VARCHAR(50),
-	@PP_MESA						VARCHAR(50)
+	@PP_MESA						VARCHAR(50),
+	@PP_EVENTO_ACTUAL				VARCHAR(100)
 AS
 
+	DECLARE @TBL_SEGUIMIENTO_MATERIAL_PROGRAMADO_LOG AS TABLE(
+			JOBNO				VARCHAR(50),
+			SER_NO				INT,
+			SERIAL				VARCHAR(50),
+			KIT_DESC			VARCHAR(255),
+			ORIGINAL_QTY		INT,
+			CUSTOMER			VARCHAR(50),
+			ITEM_NO				VARCHAR(100),
+			ITEM_NO_ETIQUETA	VARCHAR(100),
+			CUS_ITEM_NO			VARCHAR(100),
+			MODEL_NO			VARCHAR(100),
+			VERSION_NO			VARCHAR(100),
+			MESA				VARCHAR(100),
+			F_CREACION			DATE,
+			EVENTO_ACTUAL		VARCHAR(100),
+			EVENTO_SIGUIENTE	VARCHAR(100),
+			F_EVENTO			DATE
+	)
+
+	INSERT INTO @TBL_SEGUIMIENTO_MATERIAL_PROGRAMADO_LOG
 	SELECT	LTRIM(RTRIM(ccjoblin_sql.jobno))		AS JOBNO, 
+			Ser_No,
 			-- ===========================
-			ccjoblin_sql.Ser_No						AS SER_NO,
+			LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3) AS SERIAL,
 			-- ===========================
-			LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ LTRIM(RTRIM(ser_no)),3) AS SERIAL,
-			-- ===========================
-			LTRIM(RTRIM(ccjoblin_sql.kit))			AS KIT, 
 			LTRIM(RTRIM(ccjoblin_sql.kitdesc))		AS KIT_DESC, 
 			CONVERT(INT,ccjoblin_sql.originalqty)	AS ORIGINAL_QTY, 
 			LTRIM(RTRIM(ccjoblin_sql.customer))		AS CUSTOMER, 
@@ -92,7 +111,7 @@ AS
 			-- ===========================
 			ISNULL(( SELECT TOP 1 ITEM_NO
 				FROM [MATERIAL_PROGRAMADO_LOG] (NOLOCK)
-				WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ LTRIM(RTRIM(ser_no)),3) 
+				WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3)
 				ORDER BY K_MATERIAL_PROGRAMADO_LOG DESC), 'N/E') AS ITEM_NO_ETIQUETA,
 			-- ===========================
 			LTRIM(RTRIM(cccusitm_sql.cus_item_no))	AS CUS_ITEM_NO,
@@ -104,26 +123,23 @@ AS
 			ISNULL(( SELECT TOP 1 D_KIT_RUTA_EVENTO
 				FROM [MATERIAL_PROGRAMADO_LOG] (NOLOCK)
 				INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = [MATERIAL_PROGRAMADO_LOG].K_TIPO_EVENTO_KIT
-				WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ LTRIM(RTRIM(ser_no)),3) 
+				WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3) 
 				ORDER BY K_MATERIAL_PROGRAMADO_LOG DESC), 'PENDIENTE') AS EVENTO_ACTUAL,
 			-- ===========================
 			ISNULL(( SELECT TOP 1 D_KIT_RUTA_EVENTO
 				FROM KIT_RUTA (NOLOCK)
 				INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
-				WHERE L_KIT_RUTA_EVENTO = 1
-				AND ITEM_NO = LTRIM(RTRIM(ccjoblin_sql.item_no))
+				WHERE ITEM_NO = ccjoblin_sql.item_no
 				AND KIT_RUTA.K_KIT_RUTA_EVENTO > ( SELECT TOP 1 K_TIPO_EVENTO_KIT 
 											FROM [MATERIAL_PROGRAMADO_LOG] (NOLOCK)
-											WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ LTRIM(RTRIM(ser_no)),3) 
+											WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3) 
 											ORDER BY K_MATERIAL_PROGRAMADO_LOG DESC	)), 'N/E' )  AS EVENTO_SIGUIENTE,
-			--'PENDIENTE' AS EVENTO_SIGUIENTE,
 			-- ===========================
 			CONVERT(DATE, GETDATE())				AS F_EVENTO
 			-- ===========================
 	FROM ccjoblin_sql  (NOLOCK)
 	INNER JOIN ccjobhdr_sql (NOLOCK) ON ccjoblin_sql.jobno = ccjobhdr_sql.jobno 
 		AND status = 'P'
-		--AND folio IS NOT NULL 
 		AND ccjobhdr_sql.JOBNO < 50000
 	-- ===========================
 	INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
@@ -138,7 +154,7 @@ AS
 					OR	ccjoblin_sql.item_no		LIKE '%'+@PP_BUSCAR+'%'
 					OR	cccusitm_sql.modelno		LIKE '%'+@PP_BUSCAR+'%'
 					OR	ccjoblin_sql.kit			LIKE '%'+@PP_BUSCAR+'%'
-					OR LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ LTRIM(RTRIM(ser_no)),3) LIKE '%'+@PP_BUSCAR+'%' )
+					OR LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3) LIKE '%'+@PP_BUSCAR+'%' )
 	-- ===========================
 	AND ccjoblin_sql.customer = ( CASE WHEN @PP_CLIENTE <> '( TODOS )' THEN @PP_CLIENTE
 										ELSE ccjoblin_sql.customer END )
@@ -149,6 +165,11 @@ AS
     ORDER BY ccjoblin_sql.jobno, SER_NO
 
 	-- ////////////////////////////////////////////////
+	SELECT * 
+	FROM @TBL_SEGUIMIENTO_MATERIAL_PROGRAMADO_LOG
+	WHERE EVENTO_ACTUAL  = ( CASE WHEN @PP_EVENTO_ACTUAL <> '( TODOS )' THEN @PP_EVENTO_ACTUAL
+										ELSE EVENTO_ACTUAL END )
+	ORDER BY JOBNO, SER_NO
 	-- ////////////////////////////////////////////////
 GO
 
@@ -183,7 +204,6 @@ AS
 	WHERE ITEM_NO = @PP_KIT
 	AND MODELNO = @PP_MODELO
 	AND VERSIONNO = @PP_VERSION
-	AND L_KIT_RUTA_EVENTO = 1
 
 	-- ////////////////////////////////////////////////
 GO
@@ -348,7 +368,7 @@ AS
 
 	SET @OU_PART_NO		 =	@VP_PART_NO			
 	SET @OU_QTY			 =	@VP_QTY			
-	SET @OU_SERIAL_1	 =	@VP_SERIAL_1	
+	SET @OU_SERIAL_1	 =	SUBSTRING(@VP_SERIAL_1, 2, LEN(@VP_SERIAL_1)) --@VP_SERIAL_1	SE QUITA LA S DEL SERIAL
 	SET @OU_SERIAL_2	 =	@VP_SERIAL_2	
 	SET	@OU_CUSTNO		 =  @VP_CUSTNO		
 	SET	@OU_CLIENTE		 =  @VP_CLIENTE		
