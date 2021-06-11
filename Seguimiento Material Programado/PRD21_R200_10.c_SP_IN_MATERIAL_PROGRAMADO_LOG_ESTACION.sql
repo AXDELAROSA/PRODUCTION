@@ -24,7 +24,7 @@ IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_PR_
 GO
 
 /*
-	 EXEC [PG_PR_GUARDAR_MATERIAL_PROGRAMADO_LOG] 0 ,144, 'LAMINACION' , 'LAMINACION-001' , 13367 , 'rpwldfclwlcpx7,q30-s32629004*200769ctx7%magn02#wdl@1' , 0 
+	 EXEC [PG_PR_GUARDAR_MATERIAL_PROGRAMADO_LOG] 0 ,144, 'PERFORACION' , 'PERFORACION-001' , 13367 , 'rpwldfclwlcpx7,q30-s32629004*200769ctx7%magn02#wdl@1' , 0 
 */
 
 CREATE PROCEDURE [dbo].[PG_PR_GUARDAR_MATERIAL_PROGRAMADO_LOG]
@@ -70,7 +70,13 @@ AS
 
 	IF @PP_USUARIO_EVENTO = 'EMBOSSING'
 		SET @VP_TIPO_EVENTO_KIT = 250
+	
+	 --AGREGADO PARA PRUEBAS FEG
+	IF @PP_USUARIO_EVENTO = 'CERTIFICACION'
+		SET @VP_TIPO_EVENTO_KIT = 400
 
+	IF @PP_USUARIO_EVENTO = 'LIBERACION_QC'
+		SET @VP_TIPO_EVENTO_KIT = 410
 
 	-- // SECCION#1 /////////////////////////////////////////////////////////// VALIDACIONES + REGLAS DE NEGOCIO 	
 	IF @VP_TIPO_EVENTO_KIT = 0
@@ -184,7 +190,7 @@ AS
 				IF @VP_TIPO_EVENTO_KIT > @VP_KIT_EVENTO_SIGUIENTE 
 					IF @AUTORIZAR_EVENTO_DIFERENTE = 0
 						BEGIN
-							SET @VP_MENSAJE_TRANSACCION = 'El kit se encuentra en ' + @VP_D_KIT_EVENTO_ACTUAL + ' y tiene eventos pendientes, autoriza que los eventos anteriores se realizarón?'
+							SET @VP_MENSAJE_TRANSACCION = 'El kit se encuentra en: ' + @VP_D_KIT_EVENTO_ACTUAL + ' y tiene eventos pendientes, autoriza que los eventos anteriores se realizarón?'
 							RAISERROR (@VP_MENSAJE_TRANSACCION, 16, 1 ) --MENSAJE - Severity -State.
 						END
 
@@ -197,7 +203,7 @@ AS
 
 						IF @AUTORIZAR_EVENTO_DIFERENTE = 0
 							BEGIN
-								SET @VP_MENSAJE_TRANSACCION = 'El kit se encuentra en ' + @VP_D_KIT_EVENTO_ACTUAL + ', desea regresarlo al evento' + @VP_D_KIT_EVENTO_ANTERIOR + '?'
+								SET @VP_MENSAJE_TRANSACCION = 'El kit se encuentra en: ' + @VP_D_KIT_EVENTO_ACTUAL + ', desea regresarlo al evento: ' + @VP_D_KIT_EVENTO_ANTERIOR + '?'
 								RAISERROR (@VP_MENSAJE_TRANSACCION, 16, 1 ) --MENSAJE - Severity -State.
 							END
 					END
