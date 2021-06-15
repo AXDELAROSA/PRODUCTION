@@ -146,10 +146,6 @@ AS
 			-- ===========================
 			LTRIM(RTRIM(ccjoblin_sql.item_no))		AS ITEM_NO,
 			-- ===========================
-			--ISNULL(( SELECT ITEM_NO
-			--	FROM [MATERIAL_PROGRAMADO] (NOLOCK)
-			--	WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3)), 'N/E') AS ITEM_NO_ETIQUETA,
-			-- ===========================
 			LTRIM(RTRIM(cccusitm_sql.cus_item_no))	AS CUS_ITEM_NO,
 			LTRIM(RTRIM(cccusitm_sql.modelno))		AS MODEL_NO,
 			LTRIM(RTRIM(cccusitm_sql.versionno))	AS VERSION_NO,
@@ -160,18 +156,6 @@ AS
 				FROM [MATERIAL_PROGRAMADO] (NOLOCK)
 				INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = [MATERIAL_PROGRAMADO].K_TIPO_EVENTO_KIT
 				WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3)), 'MATERIALES') AS EVENTO_ACTUAL
-			-- ===========================
-			--ISNULL(( SELECT TOP 1 D_KIT_RUTA_EVENTO
-			--	FROM KIT_RUTA (NOLOCK)
-			--	INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
-			--	WHERE ITEM_NO = ccjoblin_sql.item_no
-			--	AND KIT_RUTA.K_KIT_RUTA_EVENTO > ( SELECT TOP 1 K_TIPO_EVENTO_KIT 
-			--								FROM [MATERIAL_PROGRAMADO] (NOLOCK)
-			--								WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3) )), 'N/E' )  AS EVENTO_SIGUIENTE,
-			---- ===========================
-			--ISNULL(( SELECT CONVERT(DATE, F_EVENTO)
-			--	FROM [MATERIAL_PROGRAMADO] (NOLOCK)
-			--	WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3)), CONVERT(DATE, GETDATE())) AS F_EVENTO
 			-- ===========================
 	FROM ccjoblin_sql  (NOLOCK)
 	INNER JOIN ccjobhdr_sql (NOLOCK) ON ccjoblin_sql.jobno = ccjobhdr_sql.jobno 
@@ -184,45 +168,42 @@ AS
 													FROM	cccusitm_sql (NOLOCK)
 													WHERE	cccusitm_sql.Item_No = ccjoblin_sql.item_no  
 													AND		cccusitm_sql.cus_no = ccjoblin_sql.customer)
-	-- ===========================
-	WHERE	(	ccjoblin_sql.jobno					LIKE '%'+@PP_BUSCAR+'%'
-					OR	cccusitm_sql.cus_item_no	LIKE '%'+@PP_BUSCAR+'%' 
-					OR	ccjoblin_sql.item_no		LIKE '%'+@PP_BUSCAR+'%'
-					OR	cccusitm_sql.modelno		LIKE '%'+@PP_BUSCAR+'%'
-					OR LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3) LIKE '%'+@PP_BUSCAR+'%' )
-	-- ===========================
-	AND ccjoblin_sql.customer = ( CASE WHEN @PP_CLIENTE <> '( TODOS )' THEN @PP_CLIENTE
-										ELSE ccjoblin_sql.customer END )
-	-- ===========================
-	AND ccjobhdr_sql.MACHINE = ( CASE WHEN @PP_MESA <> '( TODOS )' THEN @PP_MESA
-										ELSE ccjobhdr_sql.MACHINE END )
-	-- ===========================
 
 	-- ////////SE REALIZA EL SELECT FINAL////////////////////////////////////////
 	SELECT	SMPL.*,
 			-- ===========================
 			ISNULL(UPPER([MATERIAL_PROGRAMADO].ITEM_NO), 'N/E')  AS ITEM_NO_ETIQUETA,
-			--ISNULL(( SELECT ITEM_NO
-			--	FROM [MATERIAL_PROGRAMADO] (NOLOCK)
-			--	WHERE SERIAL = SMPL.SERIAL), 'N/E') AS ITEM_NO_ETIQUETA,
 			-- ===========================
 			ISNULL(( SELECT TOP 1 D_KIT_RUTA_EVENTO
-				FROM KIT_RUTA (NOLOCK)
-				INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
-				WHERE ITEM_NO = SMPL.ITEM_NO
-				AND KIT_RUTA.K_KIT_RUTA_EVENTO > ( SELECT TOP 1 K_TIPO_EVENTO_KIT 
-											FROM [MATERIAL_PROGRAMADO] (NOLOCK)
-											WHERE SERIAL = SMPL.SERIAL)), 'N/E' )  AS EVENTO_SIGUIENTE,
+					 FROM KIT_RUTA (NOLOCK)
+					 INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
+					 WHERE KIT_RUTA.ITEM_NO = SMPL.ITEM_NO
+					 AND KIT_RUTA.MODELNO = SMPL.MODEL_NO
+					 AND KIT_RUTA.VERSIONNO = SMPL.VERSION_NO
+					 AND KIT_RUTA.K_KIT_RUTA_EVENTO > (	SELECT TOP 1 K_TIPO_EVENTO_KIT 
+														FROM [MATERIAL_PROGRAMADO] (NOLOCK)
+														WHERE SERIAL = SMPL.SERIAL)), 'N/E' )  AS EVENTO_SIGUIENTE,
 			-- ===========================
 			ISNULL(CONVERT(DATE, [MATERIAL_PROGRAMADO].F_EVENTO), CONVERT(DATE, GETDATE()))  AS F_EVENTO
-			--ISNULL(( SELECT CONVERT(DATE, F_EVENTO)
-			--	FROM [MATERIAL_PROGRAMADO] (NOLOCK)
-			--	WHERE SERIAL = SMPL.SERIAL), CONVERT(DATE, GETDATE())) AS F_EVENTO
 			-- ===========================
 	FROM @TBL_SEGUIMIENTO_MATERIAL_PROGRAMADO_LOG AS SMPL
 	LEFT JOIN  [MATERIAL_PROGRAMADO] (NOLOCK) ON SMPL.SERIAL = [MATERIAL_PROGRAMADO].SERIAL
+	-- ===========================
 	WHERE EVENTO_ACTUAL  = ( CASE WHEN @PP_EVENTO_ACTUAL <> '( TODOS )' THEN @PP_EVENTO_ACTUAL
 								ELSE EVENTO_ACTUAL END )
+	-- ===========================
+	AND	(	SMPL.JOBNO				LIKE '%'+@PP_BUSCAR+'%'
+			OR	SMPL.CUS_ITEM_NO	LIKE '%'+@PP_BUSCAR+'%' 
+			OR	SMPL.ITEM_NO		LIKE '%'+@PP_BUSCAR+'%'
+			OR	SMPL.MODEL_NO		LIKE '%'+@PP_BUSCAR+'%'
+			OR SMPL.SERIAL			LIKE '%'+@PP_BUSCAR+'%' )
+	-- ===========================
+	AND SMPL.CUSTOMER = ( CASE WHEN @PP_CLIENTE <> '( TODOS )' THEN @PP_CLIENTE
+										ELSE SMPL.CUSTOMER END )
+	-- ===========================
+	AND SMPL.MESA = ( CASE WHEN @PP_MESA <> '( TODOS )' THEN @PP_MESA
+										ELSE SMPL.MESA END )
+	-- ===========================
 	ORDER BY JOBNO, SER_NO
 	-- ////////////////////////////////////////////////
 GO
