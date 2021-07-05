@@ -24,7 +24,7 @@ IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_LI_
 	DROP PROCEDURE [dbo].[PG_LI_MATERIAL_PROGRAMADO_ESCANEADO_X_ESTACION]
 GO
 /*
- EXEC	[dbo].[PG_LI_MATERIAL_PROGRAMADO_ESCANEADO_X_ESTACION] 0,0, 'CORTE_PRD', 'PRD-001'
+ EXEC	[dbo].[PG_LI_MATERIAL_PROGRAMADO_ESCANEADO_X_ESTACION] 0,0, 'LAMINACION', 'IT-010'
     
 */
 
@@ -37,12 +37,14 @@ CREATE PROCEDURE [dbo].[PG_LI_MATERIAL_PROGRAMADO_ESCANEADO_X_ESTACION]
 AS
 
 	SELECT	SERIAL,  
-			ITEM_NO,
+			[MATERIAL_PROGRAMADO].ITEM_NO,
+			originalqty AS CANTIDAD,
 			CODIGO_ETIQUETA,
 			( CASE WHEN EP_NOMBRE IS NULL THEN 'N/E'
 				ELSE CONCAT(EP_NOMBRE, ' ', EP_APELLIDO_PATERNO) END ) AS RESPONSABLE,
-			F_EVENTO 
+			CONVERT(VARCHAR,F_EVENTO, 20) AS F_EVENTO 
 	FROM [MATERIAL_PROGRAMADO] (NOLOCK)
+	INNER JOIN ccjoblin_sql (NOLOCK) ON LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ LTRIM(RTRIM(ser_no)),3) = SERIAL
 	LEFT JOIN HOWE.dbo.VISTA_GAFETES (NOLOCK) ON VISTA_GAFETES.EN_NUM_EMP = K_RESPONSABLE
 	WHERE USUARIO_EVENTO =  @PP_USUARIO_EVENTO
 	AND ESTACION = @PP_ESTACION
@@ -81,7 +83,7 @@ CREATE PROCEDURE [dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN]
 	@PP_EVENTO_ACTUAL				VARCHAR(100)
 AS
 
-	-- ///////CUANDO SE ESCANEA EL SERIAL DE LA ETIQUE TRAE LA S AL PRINCIPIOY CON ESTO SE ELIMINA///////////////////////////////////////////////////////
+	-- ///////CUANDO SE ESCANEA EL SERIAL DE LA ETIQUE TRAE LA S AL PRINCIPIO CON ESTO SE ELIMINA///////////////////////////////////////////////////////
 	IF SUBSTRING(@PP_BUSCAR, 1, 1) = 'S'
 		SET @PP_BUSCAR = SUBSTRING(@PP_BUSCAR, 2 , LEN(@PP_BUSCAR))
 
@@ -414,4 +416,101 @@ AS
 
 	-- /////////////////////////////////////////////////////
 GO
+
+
+
+
+-- //////////////////////////////////////////////////////////////
+-- // STORED PROCEDURE ---> SELECT / LISTADO
+-- //////////////////////////////////////////////////////////////
+-- USE [DATA_02]
+-- GO
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_RPT_MATERIAL_PROGRAMADO_ESCANEADO_X_EVENTO_TURNO]') AND type in (N'P', N'PC'))
+	DROP PROCEDURE [dbo].[PG_RPT_MATERIAL_PROGRAMADO_ESCANEADO_X_EVENTO_TURNO]
+GO
+/*
+ EXEC	[dbo].[PG_RPT_MATERIAL_PROGRAMADO_ESCANEADO_X_EVENTO_TURNO] 0,144,  '2021/07/05' , '2021/07/05' , '( TODOS )' , 400 , -1 -- CERTIFICACION
+    
+*/
+
+CREATE PROCEDURE [dbo].[PG_RPT_MATERIAL_PROGRAMADO_ESCANEADO_X_EVENTO_TURNO]
+	@PP_K_SISTEMA_EXE				INT,
+	@PP_K_USUARIO_ACCION			INT,
+	--========================================
+	@PP_F_INICIO					DATE,
+	@PP_F_FIN						DATE,
+	@PP_CLIENTE						VARCHAR(50),
+	--@PP_MODELO						VARCHAR(50),
+	@PP_EVENTO						INT,
+	@PP_TURNO						VARCHAR(50)
+AS
+	
+	DECLARE @TBL_MATERIAL_ESCANEADO TABLE(
+		ID							INT IDENTITY(1,1),
+		CLIENTE						VARCHAR(50),
+		MODELO						VARCHAR(50),
+		ITEM_NO						VARCHAR(50),
+		CUS_ITEM_NO					VARCHAR(50),
+		SERIAL						VARCHAR(50),
+		CANTIDAD_PATRON				INT,
+		CANTIDAD_PIEZA_X_PATRON		INT,
+		EVENTO						VARCHAR(50),
+		F_EVENTO					DATE,
+		TURNO						INT
+	)
+
+	INSERT INTO @TBL_MATERIAL_ESCANEADO
+	SELECT DISTINCT 
+		LTRIM(RTRIM(ccjoblin_sql.customer))		AS CUSTOMER,
+		LTRIM(RTRIM(cccusitm_sql.modelno))		AS MODEL_NO,
+		[MATERIAL_PROGRAMADO_LOG].ITEM_NO, 
+		LTRIM(RTRIM(cccusitm_sql.cus_item_no))	AS CUS_ITEM_NO,
+		SERIAL, 
+		2 AS CANTIDAD_PATRON,
+		CONVERT(INT,ccjoblin_sql.originalqty)	AS ORIGINAL_QTY, 
+		D_KIT_RUTA_EVENTO AS EVENTO, 
+		CONVERT(DATE,F_LOG) AS F_EVENTO,
+		( CASE WHEN FORMAT(CAST(F_LOG AS TIME(0)), N'hhmmss') > 2000 AND FORMAT(CAST(F_LOG AS TIME(0)), N'hhmmss')  < 60002  THEN 3
+				WHEN FORMAT(CAST(F_LOG AS TIME(0)), N'hhmmss') > 60001 AND FORMAT(CAST(F_LOG AS TIME(0)), N'hhmmss')  < 153001 THEN 1
+				ELSE 2 END ) AS TURNO
+	FROM [MATERIAL_PROGRAMADO_LOG] (NOLOCK) 
+	INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON K_KIT_RUTA_EVENTO = K_TIPO_EVENTO_KIT
+	INNER JOIN ccjoblin_sql (NOLOCK) ON (LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3)) = SERIAL
+	-- ===========================
+	INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
+	AND		ccjoblin_sql.customer = cccusitm_sql.cus_no
+	AND		cccusitm_sql.versionno = (	SELECT	MAX(CONVERT(INT, versionno)) 
+													FROM	cccusitm_sql (NOLOCK)
+													WHERE	cccusitm_sql.Item_No = ccjoblin_sql.item_no  
+													AND		cccusitm_sql.cus_no = ccjoblin_sql.customer)
+	-- ===========================
+	WHERE K_TIPO_EVENTO_KIT  = @PP_EVENTO
+	AND CONVERT(DATE, F_LOG) >= @PP_F_INICIO
+	AND CONVERT(DATE, F_LOG) <= @PP_F_FIN
+	-- ===========================
+	AND LTRIM(RTRIM(ccjoblin_sql.customer)) = ( CASE WHEN @PP_CLIENTE <> '( TODOS )' THEN @PP_CLIENTE
+													ELSE LTRIM(RTRIM(ccjoblin_sql.customer)) END )
+	-- ===========================
+	--AND LTRIM(RTRIM(cccusitm_sql.modelno)) = ( CASE WHEN @PP_MODELO <> '( TODOS )' THEN @PP_MODELO
+	--														ELSE LTRIM(RTRIM(cccusitm_sql.modelno)) END )
+	-- ////////////////////////////////////////////////
+	SELECT CLIENTE,				
+		   MODELO,					
+		   ITEM_NO,	
+		   CUS_ITEM_NO,	
+		   SERIAL,				
+		   CANTIDAD_PATRON,			
+		   CANTIDAD_PIEZA_X_PATRON,	
+		   (CANTIDAD_PATRON * CANTIDAD_PIEZA_X_PATRON ) AS TOTAL_PIEZAS,
+		   EVENTO,					
+		   F_EVENTO,				
+		   TURNO		 
+	FROM @TBL_MATERIAL_ESCANEADO
+	WHERE TURNO = ( CASE WHEN @PP_TURNO <> -1 THEN @PP_TURNO
+						ELSE TURNO END )
+	ORDER BY F_EVENTO, TURNO, CLIENTE, MODELO
+
+	-- ////////////////////////////////////////////////
+GO
+
 
