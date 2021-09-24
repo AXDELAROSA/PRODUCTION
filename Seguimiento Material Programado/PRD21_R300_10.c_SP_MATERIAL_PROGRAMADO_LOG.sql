@@ -232,6 +232,120 @@ GO
 
 
 
+
+-- //////////////////////////////////////////////////////////////
+-- // STORED PROCEDURE ---> SELECT / LISTADO
+-- //////////////////////////////////////////////////////////////
+-- USE DATA_02
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_SK_ESTATUS_MATERIAL_PROGRAMADO_X_ORDEN]') AND type in (N'P', N'PC'))
+	DROP PROCEDURE [dbo].[PG_SK_ESTATUS_MATERIAL_PROGRAMADO_X_ORDEN]
+GO
+
+/*
+ EXEC	[dbo].[PG_SK_ESTATUS_MATERIAL_PROGRAMADO_X_ORDEN] 0,0, '41026'
+*/
+
+
+CREATE PROCEDURE [dbo].[PG_SK_ESTATUS_MATERIAL_PROGRAMADO_X_ORDEN]
+	@PP_K_SISTEMA_EXE				INT,
+	@PP_K_USUARIO_ACCION			INT,
+	-- ===========================
+	@PP_ORDEN						VARCHAR(100)
+AS
+	-- ///////SE CREA TABLA TEMPORAL PARA GUARDAR DATOS DEL PRIMER SELECT///////////////////////////////////////////////////////
+	DECLARE @TBL_SEGUIMIENTO_MATERIAL_PROGRAMADO_LOG AS TABLE(
+			JOBNO				VARCHAR(50),
+			SER_NO				INT,
+			SERIAL				VARCHAR(50),
+			KIT_DESC			VARCHAR(255),
+			ORIGINAL_QTY		INT,
+			CUSTOMER			VARCHAR(50),
+			ITEM_NO				VARCHAR(100),
+			--ITEM_NO_ETIQUETA	VARCHAR(100),
+			CUS_ITEM_NO			VARCHAR(100),
+			MODEL_NO			VARCHAR(100),
+			VERSION_NO			VARCHAR(100),
+			MESA				VARCHAR(100),
+			F_CREACION			DATE,
+			EVENTO_ACTUAL		VARCHAR(100)
+			--EVENTO_SIGUIENTE	VARCHAR(100),
+			--F_EVENTO			DATE
+	)
+
+	-- //////////SE INGRESAN LOS DATOS A LA TABLA TEMPORAL////////////////////////////////////////////////////
+	INSERT INTO @TBL_SEGUIMIENTO_MATERIAL_PROGRAMADO_LOG
+	SELECT	LTRIM(RTRIM(ccjoblin_sql.jobno))		AS JOBNO, 
+			Ser_No,
+			-- ===========================
+			LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3) AS SERIAL,
+			-- ===========================
+			LTRIM(RTRIM(ccjoblin_sql.kitdesc))		AS KIT_DESC, 
+			CONVERT(INT,ccjoblin_sql.originalqty)	AS ORIGINAL_QTY, 
+			LTRIM(RTRIM(ccjoblin_sql.customer))		AS CUSTOMER, 
+			-- ===========================
+			LTRIM(RTRIM(ccjoblin_sql.item_no))		AS ITEM_NO,
+			-- ===========================
+			LTRIM(RTRIM(cccusitm_sql.cus_item_no))	AS CUS_ITEM_NO,
+			LTRIM(RTRIM(cccusitm_sql.modelno))		AS MODEL_NO,
+			LTRIM(RTRIM(cccusitm_sql.versionno))	AS VERSION_NO,
+			LTRIM(RTRIM(MACHINE))					AS MESA,
+			[dbo].[CONVERT_INT_TO_DATE](ccjobhdr_sql.datecreated) AS F_CREACION,
+			-- ===========================
+			ISNULL(( SELECT D_KIT_RUTA_EVENTO
+				FROM [MATERIAL_PROGRAMADO] (NOLOCK)
+				INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = [MATERIAL_PROGRAMADO].K_TIPO_EVENTO_KIT
+				WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3)), 'MATERIALES') AS EVENTO_ACTUAL
+			-- ===========================
+	FROM ccjoblin_sql  (NOLOCK)
+	INNER JOIN ccjobhdr_sql (NOLOCK) ON ccjoblin_sql.jobno = ccjobhdr_sql.jobno 
+		AND status = 'P'
+		AND ccjobhdr_sql.JOBNO < 50000
+	-- ===========================
+	INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
+	AND		ccjoblin_sql.customer = cccusitm_sql.cus_no
+	AND		cccusitm_sql.versionno = (	SELECT	MAX(CONVERT(INT, versionno)) 
+													FROM	cccusitm_sql (NOLOCK)
+													WHERE	cccusitm_sql.Item_No = ccjoblin_sql.item_no  
+													AND		cccusitm_sql.cus_no = ccjoblin_sql.customer)
+
+	-- ////////SE REALIZA EL SELECT FINAL////////////////////////////////////////
+	SELECT	SMPL.*,
+			-- ===========================
+			ISNULL(UPPER([MATERIAL_PROGRAMADO].ITEM_NO), 'N/E')  AS ITEM_NO_ETIQUETA,
+			-- ===========================
+			( CASE WHEN EVENTO_ACTUAL = 'FACTURADO' THEN 'FIN'
+					ELSE (
+			SELECT ISNULL(( SELECT TOP 1  D_KIT_RUTA_EVENTO
+			FROM KIT_RUTA (NOLOCK)
+			INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
+			WHERE KIT_RUTA.ITEM_NO = SMPL.ITEM_NO
+			AND KIT_RUTA.MODELNO = SMPL.MODEL_NO
+			AND KIT_RUTA.VERSIONNO = SMPL.VERSION_NO
+			AND KIT_RUTA.O_KIT_RUTA_EVENTO > (	SELECT  KIT_RUTA.O_KIT_RUTA_EVENTO
+												FROM KIT_RUTA (NOLOCK)
+												INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
+												WHERE KIT_RUTA.ITEM_NO = SMPL.ITEM_NO
+												AND KIT_RUTA.MODELNO = SMPL.MODEL_NO
+												AND KIT_RUTA.VERSIONNO = SMPL.VERSION_NO
+												AND KIT_RUTA.K_KIT_RUTA_EVENTO = (	SELECT TOP 1 K_TIPO_EVENTO_KIT 
+																					FROM [MATERIAL_PROGRAMADO] (NOLOCK)
+																					WHERE SERIAL = SMPL.SERIAL))), 'N/E' )) END )  AS EVENTO_SIGUIENTE,
+			-- ===========================
+			ISNULL(CONVERT(DATE, [MATERIAL_PROGRAMADO].F_EVENTO), CONVERT(DATE, GETDATE()))  AS F_EVENTO
+			-- ===========================
+	FROM @TBL_SEGUIMIENTO_MATERIAL_PROGRAMADO_LOG AS SMPL
+	LEFT JOIN  [MATERIAL_PROGRAMADO] (NOLOCK) ON SMPL.SERIAL = [MATERIAL_PROGRAMADO].SERIAL
+	-- ===========================
+	WHERE SMPL.JOBNO = @PP_ORDEN
+	-- ===========================
+	ORDER BY SER_NO
+	-- ////////////////////////////////////////////////
+GO
+
+
+
+
+
 -- //////////////////////////////////////////////////////////////
 -- // STORED PROCEDURE ---> SELECT / LISTADO
 -- //////////////////////////////////////////////////////////////
