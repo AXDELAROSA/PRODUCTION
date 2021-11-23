@@ -20,7 +20,9 @@ GO
 ----	[PG_UP_ESTATUS_ORDEN_TRABAJO_TOOL]
 --	[PG_DL_ORDEN_TRABAJO]
 --	[PG_IN_ORDEN_TRABAJO_DESDE_TPO]
+--	[PG_IN_ORDEN_TRABAJO_DESDE_TOOL_SET]
 --	[PG_PR_ENVIAR_CORREO_ORDEN_TRABAJO]
+--	[PG_PR_ENVIAR_CORREO_ORDEN_TRABAJO_HERRAMENTAL]
 -- //////////////////////////////////////////////////////////////
 --	[PG_IN_ORDEN_TRABAJO_DETALLE]		-- COMENTADO
 
@@ -52,6 +54,8 @@ AS
 				D_ESTACION_TRABAJO,
 				D_SUB_ESTACION_TRABAJO,
 				-- =============================
+				ISNULL(K_TPO_CUSTOMER,0) AS K_TPO_CUSTOMER,
+				-- =============================
 				ORDEN_TRABAJO.*
 				-- =============================
 	FROM		ORDEN_TRABAJO			(NOLOCK)
@@ -60,6 +64,8 @@ AS
 	LEFT JOIN	BD_GENERAL.DBO.USUARIO_PEARL	AS URECIBE	(NOLOCK) ON URECIBE.K_USUARIO_PEARL	= ORDEN_TRABAJO.K_USUARIO_RECIBE
 	LEFT JOIN	ESTACION_TRABAJO		(NOLOCK) ON ESTACION_TRABAJO.K_ESTACION_TRABAJO			= ORDEN_TRABAJO.K_ESTACION
 	LEFT JOIN	SUB_ESTACION_TRABAJO	(NOLOCK) ON SUB_ESTACION_TRABAJO.K_SUB_ESTACION_TRABAJO	= ORDEN_TRABAJO.K_SUB_ESTACION
+				-- =============================
+	LEFT JOIN	TPO_CUSTOMER_DET_SET_COTIZADO	(NOLOCK) ON TPO_CUSTOMER_DET_SET_COTIZADO.K_ORDEN_TRABAJO	= ORDEN_TRABAJO.K_ORDEN_TRABAJO
 				-- =============================
 	WHERE		( @PP_K_STATUS_ORDEN_TRABAJO	=-1		OR	ORDEN_TRABAJO.K_STATUS_ORDEN_TRABAJO	= @PP_K_STATUS_ORDEN_TRABAJO )
 				-- =============================
@@ -80,6 +86,8 @@ GO
 --		 EXECUTE [dbo].[PG_SK_ORDEN_TRABAJO] 0,139,	1
 --		 EXECUTE [dbo].[PG_SK_ORDEN_TRABAJO] 0,139,	2
 --		 EXECUTE [dbo].[PG_SK_ORDEN_TRABAJO] 0,139,	3
+--		 EXECUTE [dbo].[PG_SK_ORDEN_TRABAJO] 0,139,	20
+--		 EXECUTE [dbo].[PG_SK_ORDEN_TRABAJO] 0,139,	21
 CREATE PROCEDURE [dbo].[PG_SK_ORDEN_TRABAJO]
 	@PP_K_SISTEMA_EXE				INT,
 	@PP_K_USUARIO_ACCION			INT,
@@ -98,10 +106,13 @@ AS
 				D_ESTACION_TRABAJO,
 				D_SUB_ESTACION_TRABAJO,
 				-- =============================
-				(	SELECT	COUNT(K_TPO_CUSTOMER_DET_SET_COTIZADO)
-					FROM	TPO_CUSTOMER_DET_SET_COTIZADO (NOLOCK) 
-					WHERE	TPO_CUSTOMER_DET_SET_COTIZADO.K_ORDEN_TRABAJO	= ORDEN_TRABAJO.K_ORDEN_TRABAJO 
-				) AS L_DETALLE_DADOS,
+				(	CASE
+						WHEN	(	SELECT COUNT(K_TOOL_SET_ORDEN_TRABAJO)	FROM TOOL_SET_ORDEN_TRABAJO (NOLOCK)	 WHERE	K_ORDEN_TRABAJO = @PP_K_ORDEN_TRABAJO ) > 0 THEN	1
+						WHEN	(	SELECT COUNT(K_TOOL_SET_ORDEN_TRABAJO)	FROM TOOL_SET_ORDEN_TRABAJO (NOLOCK)	 WHERE	K_ORDEN_TRABAJO = @PP_K_ORDEN_TRABAJO ) = 0 THEN													
+								(	SELECT	COUNT(K_TPO_CUSTOMER_DET_SET_COTIZADO)
+									FROM	TPO_CUSTOMER_DET_SET_COTIZADO (NOLOCK) 
+									WHERE	TPO_CUSTOMER_DET_SET_COTIZADO.K_ORDEN_TRABAJO	= ORDEN_TRABAJO.K_ORDEN_TRABAJO )
+				END	) AS L_DETALLE_DADOS,
 				-- =============================
 				( CASE
 					WHEN	CONCAT(USOLICI.K_USUARIO_DEPARTAMENTO,'-',USOLICI.K_CLASE_DEPARTAMENTO) =	(	SELECT	CONCAT(K_USUARIO_DEPARTAMENTO,'-',K_CLASE_DEPARTAMENTO) 
@@ -124,6 +135,65 @@ AS
 				-- =============================
 	ORDER BY	F_ORDEN_TRABAJO		DESC
 	-- /////////////////////////////////////////////////////////////////////
+GO
+
+
+-- //////////////////////////////////////////////////////////////
+-- // STORED PROCEDURE ---> SELECT / FICHA
+-- //		PARA MOSTRAR EL DETALLE DE LOS DADOS EN LA ORDEN
+-- //		DE MANTENIMIENTO.
+-- //////////////////////////////////////////////////////////////
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_SK_HDR_ORDEN_TRABAJO_REPORTE]') AND type in (N'P', N'PC'))
+	DROP PROCEDURE [dbo].[PG_SK_HDR_ORDEN_TRABAJO_REPORTE]
+GO
+--		 EXECUTE [dbo].[PG_SK_HDR_ORDEN_TRABAJO_REPORTE] 0,139,1
+--		 EXECUTE [dbo].[PG_SK_HDR_ORDEN_TRABAJO_REPORTE] 0,139,2
+--		 EXECUTE [dbo].[PG_SK_HDR_ORDEN_TRABAJO_REPORTE] 0,139,3
+--		 EXECUTE [dbo].[PG_SK_HDR_ORDEN_TRABAJO_REPORTE] 0,139,4
+--		 EXECUTE [dbo].[PG_SK_HDR_ORDEN_TRABAJO_REPORTE] 0,139,5
+--		 EXECUTE [dbo].[PG_SK_HDR_ORDEN_TRABAJO_REPORTE] 0,139,6
+--		 EXECUTE [dbo].[PG_SK_HDR_ORDEN_TRABAJO_REPORTE] 0,139,7
+--		 EXECUTE [dbo].[PG_SK_HDR_ORDEN_TRABAJO_REPORTE] 0,139,20
+CREATE PROCEDURE [dbo].[PG_SK_HDR_ORDEN_TRABAJO_REPORTE]
+	@PP_K_SISTEMA_EXE				INT,
+	@PP_K_USUARIO_ACCION			INT,
+	-- ===========================
+	@PP_K_ORDEN_TRABAJO				INT
+AS
+	DECLARE  @VP_MENSAJE			NVARCHAR(MAX) = ''
+			,@VP_NOMBRE				VARCHAR(500)
+	-- ///////////////////////////////////////////
+	SELECT		TOP (1)
+				CONCAT(USOLICI.NOMBRE,' ',USOLICI.APELLIDO_PATERNO)	AS REQUERIDO_POR,
+				-- =============================
+				D_STATUS_ORDEN_TRABAJO,	
+				-- =============================
+				CONCAT(	D_ESTACION_TRABAJO ,' (' + D_SUB_ESTACION_TRABAJO + ')') AS D_ESTACION_TRABAJO,
+				-- =============================
+				FORMAT(K_ORDEN_TRABAJO,'000000')		AS K_ORDEN_TRABAJO,
+				--CONVERT(varchar,F_ORDEN_TRABAJO,106)	AS F_ORDEN_TRABAJO,
+				CONVERT(VARCHAR(100),F_ORDEN_TRABAJO,106)	AS F_ORDEN_TRABAJO,-- 25/OCT/2021
+				-- =============================
+				D_ORDEN_TRABAJO,
+				ACCION_REALIZADA,
+				C_ORDEN_TRABAJO,
+				-- =============================
+				D_TECNICO_REALIZA,
+				DURACION_TOTAL_MINUTOS,
+				CONCAT(URECIBE.NOMBRE,' ',URECIBE.APELLIDO_PATERNO)	AS RECIBIDO_POR
+				--ORDEN_TRABAJO.*
+	FROM		ORDEN_TRABAJO			(NOLOCK)
+	INNER JOIN 	STATUS_ORDEN_TRABAJO	(NOLOCK) ON STATUS_ORDEN_TRABAJO.K_STATUS_ORDEN_TRABAJO	= ORDEN_TRABAJO.K_STATUS_ORDEN_TRABAJO
+	INNER JOIN	BD_GENERAL.DBO.USUARIO_PEARL	AS USOLICI	(NOLOCK) ON USOLICI.K_USUARIO_PEARL	= ORDEN_TRABAJO.K_USUARIO_SOLICITA
+	LEFT JOIN	BD_GENERAL.DBO.USUARIO_PEARL	AS URECIBE	(NOLOCK) ON URECIBE.K_USUARIO_PEARL	= ORDEN_TRABAJO.K_USUARIO_RECIBE
+	LEFT JOIN	ESTACION_TRABAJO		(NOLOCK) ON ESTACION_TRABAJO.K_ESTACION_TRABAJO			= ORDEN_TRABAJO.K_ESTACION
+	LEFT JOIN	SUB_ESTACION_TRABAJO	(NOLOCK) ON SUB_ESTACION_TRABAJO.K_SUB_ESTACION_TRABAJO	= ORDEN_TRABAJO.K_SUB_ESTACION
+				-- =============================
+	WHERE		K_ORDEN_TRABAJO			= @PP_K_ORDEN_TRABAJO
+	AND			K_TIPO_ORDEN_TRABAJO	= 0
+				-- =============================
+	ORDER BY	F_ORDEN_TRABAJO		DESC
+	-- ////////////////////////////////////////////////////////////////////
 GO
 
 
@@ -170,12 +240,20 @@ DECLARE  @VP_MENSAJE				NVARCHAR(MAX)	= ''
 BEGIN TRANSACTION 
 BEGIN TRY
 	-- /////////////////////////////////////////////////////////////////////
+	IF ( (	SELECT	CONCAT(K_USUARIO_DEPARTAMENTO,'-',K_CLASE_DEPARTAMENTO) 
+			FROM	BD_GENERAL.DBO.USUARIO_PEARL (NOLOCK) 
+			WHERE	K_USUARIO_PEARL	= @PP_K_USUARIO_ACCION	) = '5-2' )
+	BEGIN
+		SET @VP_MENSAJE='Los usuarios de mantenimiento no pueden generar una orden de trabajo.'
+		RAISERROR (@VP_MENSAJE, 16, 1 ) 
+	END
+	-- /////////////////////////////////////////////////////////////////////
 	IF @PP_D_ORDEN_TRABAJO	= ''
 	BEGIN
 		SET @VP_MENSAJE='Se debe indicar una Descripción para la orden de Trabajo.'
 		RAISERROR (@VP_MENSAJE, 16, 1 ) 
 	END
-
+	
 	SET	@PP_K_STATUS_ORDEN_TRABAJO	= 10
 	SET	@PP_F_ORDEN_TRABAJO			= GETDATE()
 	SET	@PP_DURACION_TOTAL_MINUTOS	= 0
@@ -310,6 +388,14 @@ DECLARE  @VP_MENSAJE				NVARCHAR(MAX)	= ''
 BEGIN TRANSACTION 
 BEGIN TRY
 	-- /////////////////////////////////////////////////////////////////////
+	IF ( (	SELECT	CONCAT(K_USUARIO_DEPARTAMENTO,'-',K_CLASE_DEPARTAMENTO) 
+			FROM	BD_GENERAL.DBO.USUARIO_PEARL (NOLOCK) 
+			WHERE	K_USUARIO_PEARL	= @PP_K_USUARIO_ACCION	) = '5-2' )
+	BEGIN
+		SET @VP_MENSAJE='Los usuarios de mantenimiento no pueden actulizar una orden de trabajo.'
+		RAISERROR (@VP_MENSAJE, 16, 1 ) 
+	END
+	-- /////////////////////////////////////////////////////////////////////
 	IF @PP_D_ORDEN_TRABAJO	= ''
 	BEGIN
 		SET @VP_MENSAJE='Se debe indicar una Descripción para la orden de Trabajo. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
@@ -388,28 +474,28 @@ CREATE PROCEDURE [dbo].[PG_UP_ESTATUS_ORDEN_TRABAJO]
 	@PP_K_SISTEMA_EXE				INT,
 	@PP_K_USUARIO_ACCION			INT,
 	-- ============================
-	@PP_K_ORDEN_TRABAJO				INT,
+	@PP_K_ORDEN_TRABAJO							INT,
 	-- ============================
-	@PP_K_STATUS_ORDEN_TRABAJO		INT,
+	@PP_K_STATUS_ORDEN_TRABAJO					INT,
 	-- ============================
-	@PP_K_ESTACION					INT,
-	@PP_K_SUB_ESTACION				INT,
+	@PP_K_ESTACION								INT,
+	@PP_K_SUB_ESTACION							INT,
 	-- ============================
-	@PP_D_ORDEN_TRABAJO				NVARCHAR(MAX),
+	@PP_D_ORDEN_TRABAJO							NVARCHAR(MAX),
 	---- @PP_F_ORDEN_TRABAJO			DATE,
 	---- ============================
-	@PP_DURACION_TOTAL_MINUTOS		INT,
+	@PP_DURACION_TOTAL_MINUTOS					INT,
 	---- ============================
 	---- @PP_K_TIPO_ORDEN_TRABAJO		INT,
-	---- @PP_K_MOTIVO_ORDEN_TRABAJO	INT,
+	---- @PP_K_MOTIVO_ORDEN_TRABAJO		INT,
 	---- ============================
-	@PP_N_TECNICO_REALIZA			INT,
-	@PP_D_TECNICO_REALIZA			VARCHAR(500),
+	@PP_N_TECNICO_REALIZA						INT,
+	@PP_D_TECNICO_REALIZA						VARCHAR(500),
 	---- ============================
-	@PP_ACCION_REALIZADA			NVARCHAR(MAX),
-	@PP_C_ORDEN_TRABAJO				NVARCHAR(MAX),
+	@PP_ACCION_REALIZADA						NVARCHAR(MAX),
+	@PP_C_ORDEN_TRABAJO							NVARCHAR(MAX),
 	-- ============================
-	@PP_K_ACCION_REALIZADA			INT,
+	@PP_K_ACCION_REALIZADA						INT,
 	-- ============================
 	@PP_ARRAY_K_TPO_CUSTOMER_DET_SET_COTIZADO	NVARCHAR(MAX)= '',
 	@PP_ARRAY_TOOL_SET_CANTIDAD_FABRICADA		NVARCHAR(MAX)= ''
@@ -433,230 +519,255 @@ BEGIN TRY
 	--============================================================================
 	--======================================	ACTUALIZAR LA ORDEN_TRABAJO
 	--============================================================================
-	IF @PP_ARRAY_K_TPO_CUSTOMER_DET_SET_COTIZADO <> ''
+	DECLARE	@VP_EXISTE_ORDEN_TRABAJO	INT	= 0
+	
+	SET @VP_EXISTE_ORDEN_TRABAJO	= ISNULL(	(SELECT	COUNT(K_ORDEN_TRABAJO)	FROM [TOOL_SET_ORDEN_TRABAJO]	(NOLOCK)	WHERE	K_ORDEN_TRABAJO	= @PP_K_ORDEN_TRABAJO ),0	)
+	
+	IF @VP_EXISTE_ORDEN_TRABAJO	= 1
 	BEGIN
-
-		IF	( @PP_DURACION_TOTAL_MINUTOS = 0 ) OR ( @PP_ACCION_REALIZADA = '' )
+			IF	( @PP_DURACION_TOTAL_MINUTOS = 0 ) OR ( @PP_ACCION_REALIZADA = '' )
+			BEGIN
+				SET @VP_MENSAJE='Se debe indicar la DURACIÓN y/o ACCIÓN REALIZADA para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+				RAISERROR (@VP_MENSAJE, 16, 1 ) 
+			END
+	END
+	
+	IF @VP_EXISTE_ORDEN_TRABAJO	= 0
+	BEGIN
+		SET @VP_EXISTE_ORDEN_TRABAJO	= ISNULL(	(SELECT	COUNT(K_ORDEN_TRABAJO)	FROM TPO_CUSTOMER_DET_SET_COTIZADO (NOLOCK)	WHERE	K_ORDEN_TRABAJO	= @PP_K_ORDEN_TRABAJO ),0	)
+	
+		IF @VP_EXISTE_ORDEN_TRABAJO	= 1
 		BEGIN
-			SET @VP_MENSAJE='Se debe indicar la DURACIÓN y/o ACCIÓN REALIZADA para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-			RAISERROR (@VP_MENSAJE, 16, 1 ) 
-		END
+				IF @PP_ARRAY_K_TPO_CUSTOMER_DET_SET_COTIZADO <> ''
+				BEGIN
 
-		EXECUTE [DBO].[PG_UP_ESTATUS_ORDEN_TRABAJO_TOOL]	@PP_K_SISTEMA_EXE,	@PP_K_USUARIO_ACCION,
-															-- ============================
-															@PP_ARRAY_K_TPO_CUSTOMER_DET_SET_COTIZADO,	@PP_ARRAY_TOOL_SET_CANTIDAD_FABRICADA
+					IF	( @PP_DURACION_TOTAL_MINUTOS = 0 ) OR ( @PP_ACCION_REALIZADA = '' )
+					BEGIN
+						SET @VP_MENSAJE='Se debe indicar la DURACIÓN y/o ACCIÓN REALIZADA para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+						RAISERROR (@VP_MENSAJE, 16, 1 ) 
+					END
 
-			IF (	SELECT	SUM(TOOL_SET_CANTIDAD_COTIZADA) - SUM(TOOL_SET_CANTIDAD_FABRICADA)
-					FROM	TPO_CUSTOMER_DET_SET_COTIZADO (NOLOCK)
-					WHERE	K_ORDEN_TRABAJO	= @PP_K_ORDEN_TRABAJO	)	= 0
-			BEGIN
-				SET	@PP_K_ACCION_REALIZADA = 40
-			END
-			ELSE IF @PP_K_STATUS_ORDEN_TRABAJO = 35
-			BEGIN
-				SET	@PP_K_ACCION_REALIZADA = 35
-			END
-			--ELSE
-			--BEGIN
-			--	SET	@PP_K_ACCION_REALIZADA = 35
-			--END
+					EXECUTE [DBO].[PG_UP_ESTATUS_ORDEN_TRABAJO_TOOL]	@PP_K_SISTEMA_EXE,	@PP_K_USUARIO_ACCION,
+																		-- ============================
+																		@PP_ARRAY_K_TPO_CUSTOMER_DET_SET_COTIZADO,	@PP_ARRAY_TOOL_SET_CANTIDAD_FABRICADA
 
-			UPDATE	ORDEN_TRABAJO
-			SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
+						IF (	SELECT	SUM(TOOL_SET_CANTIDAD_COTIZADA) - SUM(TOOL_SET_CANTIDAD_FABRICADA)
+								FROM	TPO_CUSTOMER_DET_SET_COTIZADO (NOLOCK)
+								WHERE	K_ORDEN_TRABAJO	= @PP_K_ORDEN_TRABAJO	)	= 0
+						BEGIN
+							SET	@PP_K_ACCION_REALIZADA = 40
+						END
+						ELSE IF @PP_K_STATUS_ORDEN_TRABAJO = 35
+						BEGIN
+							SET	@PP_K_ACCION_REALIZADA = 35
+						END
+
+						UPDATE	ORDEN_TRABAJO
+						SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
 					
-					[ACCION_REALIZADA]		 = ( CASE
-													WHEN [ACCION_REALIZADA]=''	THEN @PP_ACCION_REALIZADA
-													WHEN [ACCION_REALIZADA]<>'' THEN [ACCION_REALIZADA] + ' /[ADICI]/ ' + @PP_ACCION_REALIZADA
-												END ),
-					[DURACION_TOTAL_MINUTOS] = ( CASE
-													WHEN [DURACION_TOTAL_MINUTOS]=0	THEN @PP_DURACION_TOTAL_MINUTOS
-													WHEN [DURACION_TOTAL_MINUTOS]>0 THEN [DURACION_TOTAL_MINUTOS] + @PP_DURACION_TOTAL_MINUTOS
-												END ),
+								[ACCION_REALIZADA]		 = ( CASE
+																WHEN [ACCION_REALIZADA]=''	THEN @PP_ACCION_REALIZADA
+																WHEN [ACCION_REALIZADA]<>'' THEN [ACCION_REALIZADA] + ' /[ADICI]/ ' + @PP_ACCION_REALIZADA
+															END ),
+								[DURACION_TOTAL_MINUTOS] = ( CASE
+																WHEN [DURACION_TOTAL_MINUTOS]=0	THEN @PP_DURACION_TOTAL_MINUTOS
+																WHEN [DURACION_TOTAL_MINUTOS]>0 THEN [DURACION_TOTAL_MINUTOS] + @PP_DURACION_TOTAL_MINUTOS
+															END ),
+								[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
+								[F_CAMBIO]				 = GETDATE()
+						WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
+						AND		[K_STATUS_ORDEN_TRABAJO] IN (30,35)
+						IF @@ROWCOUNT = 0
+						BEGIN
+							SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+							RAISERROR (@VP_MENSAJE, 16, 1 ) 
+						END
+					END
+		END
+	END
+	--------------------------------------------------------------------------------------------------------------------
+	IF @VP_EXISTE_ORDEN_TRABAJO	= 0
+	BEGIN
+		IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (10)	AND @PP_K_ACCION_REALIZADA = 20	--	CREADA, PASA A ESTATUS ENVIADA
+		BEGIN
+			UPDATE	ORDEN_TRABAJO
+			SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
+					[K_ESTACION]			 = @PP_K_ESTACION,
+					[K_SUB_ESTACION]		 = @PP_K_SUB_ESTACION,
+					[D_ORDEN_TRABAJO]		 = @PP_D_ORDEN_TRABAJO,
 					[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
 					[F_CAMBIO]				 = GETDATE()
 			WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
-			AND		[K_STATUS_ORDEN_TRABAJO] IN (30,35)
+			AND		[K_STATUS_ORDEN_TRABAJO] = 10
 			IF @@ROWCOUNT = 0
 			BEGIN
 				SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-				RAISERROR (@VP_MENSAJE, 16, 1 ) 
+				RAISERROR (@VP_MENSAJE, 16, 1 )
 			END
-		END
-	--------------------------------------------------------------------------------------------------------------------
-	ELSE IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (10)	AND @PP_K_ACCION_REALIZADA = 20	--	CREADA, PASA A ESTATUS ENVIADA
-	BEGIN
-		UPDATE	ORDEN_TRABAJO
-		SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
-				[K_ESTACION]			 = @PP_K_ESTACION,
-				[K_SUB_ESTACION]		 = @PP_K_SUB_ESTACION,
-				[D_ORDEN_TRABAJO]		 = @PP_D_ORDEN_TRABAJO,
-				[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
-				[F_CAMBIO]				 = GETDATE()
-		WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
-		AND		[K_STATUS_ORDEN_TRABAJO] = 10
-		IF @@ROWCOUNT = 0
-		BEGIN
-			SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-			RAISERROR (@VP_MENSAJE, 16, 1 )
-		END
-	END
-	--------------------------------------------------------------------------------------------------------------------
-	ELSE	IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (20)	AND @PP_K_ACCION_REALIZADA = 30	--	ENVIADA, PASA A ESTATUS ASIGNADA
-	BEGIN
-		IF	( @PP_N_TECNICO_REALIZA = 0 ) OR ( @PP_D_TECNICO_REALIZA = '' )
-		BEGIN
-			SET @VP_MENSAJE='Se debe indicar un TÉCNICO para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-			RAISERROR (@VP_MENSAJE, 16, 1 ) 
-		END
 
-		UPDATE	ORDEN_TRABAJO
-		SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
-				[N_TECNICO_REALIZA]		 = @PP_N_TECNICO_REALIZA,
-				[D_TECNICO_REALIZA]		 = @PP_D_TECNICO_REALIZA,
-				[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
-				[F_CAMBIO]				 = GETDATE()
-		WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
-		AND		[K_STATUS_ORDEN_TRABAJO] = 20
-		IF @@ROWCOUNT = 0
-		BEGIN
-			SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-			RAISERROR (@VP_MENSAJE, 16, 1 ) 
+			--SE ENVÍA CORREO CUANDO HA SIDO ENVIADA UNA ORDEN DE TRABAJO.
+			EXECUTE	[PG_PR_ENVIAR_CORREO_ORDEN_TRABAJO]	@PP_K_SISTEMA_EXE,	@PP_K_USUARIO_ACCION,
+														-- ===========================
+														@PP_K_ORDEN_TRABAJO
 		END
-	END
-	--------------------------------------------------------------------------------------------------------------------
-	ELSE	IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (30)	AND @PP_K_ACCION_REALIZADA = 40	--	ASIGNADA, PASA A ESTATUS TERMINADA
-	BEGIN
-		IF	( @PP_DURACION_TOTAL_MINUTOS = 0 ) OR ( @PP_ACCION_REALIZADA = '' )
+		--------------------------------------------------------------------------------------------------------------------
+		ELSE	IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (20)	AND @PP_K_ACCION_REALIZADA = 30	--	ENVIADA, PASA A ESTATUS ASIGNADA
 		BEGIN
-			SET @VP_MENSAJE='Se debe indicar la DURACIÓN y/o ACCIÓN REALIZADA para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-			RAISERROR (@VP_MENSAJE, 16, 1 ) 
-		END
+			IF	( @PP_N_TECNICO_REALIZA = 0 ) OR ( @PP_D_TECNICO_REALIZA = '' )
+				BEGIN
+					SET @VP_MENSAJE='Se debe indicar un TÉCNICO para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+					RAISERROR (@VP_MENSAJE, 16, 1 ) 
+				END
 
-		UPDATE	ORDEN_TRABAJO
-		SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
-				[ACCION_REALIZADA]		 = @PP_ACCION_REALIZADA,
-				[DURACION_TOTAL_MINUTOS] = @PP_DURACION_TOTAL_MINUTOS,
-				[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
-				[F_CAMBIO]				 = GETDATE()
-		WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
-		AND		[K_STATUS_ORDEN_TRABAJO] = 30
-		IF @@ROWCOUNT = 0
-		BEGIN
-			SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-			RAISERROR (@VP_MENSAJE, 16, 1 ) 
-		END
-	END
-	--------------------------------------------------------------------------------------------------------------------
-	ELSE	IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (40)	AND @PP_K_ACCION_REALIZADA IN ( 50 , 60 )	--	TERMINADA, PUEDE PASAR A RECHAZADA O ACEPTADA.
-	BEGIN
-		IF	( @PP_C_ORDEN_TRABAJO = '' AND @PP_K_ACCION_REALIZADA	= 50)	--	RECHAZADA. EL COMENTARIO POR PARTE DEL USUARIO ES OBLIGATORIO.
-		BEGIN																--	ACEPTADA. EL COMENTARIO POR PARTE DEL USUARIO NO ES OBLIGATORIO.
-			SET @VP_MENSAJE='Se debe indicar un COMENTARIO para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-			RAISERROR (@VP_MENSAJE, 16, 1 ) 
-		END
-
-		--IF @PP_K_ACCION_REALIZADA	= 50			--	RECHAZADA. EL COMENTARIO POR PARTE DEL USUARIO ES OBLIGATORIO.
-		--BEGIN
-			UPDATE	ORDEN_TRABAJO
-			SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
-					[C_ORDEN_TRABAJO]		 = @PP_C_ORDEN_TRABAJO,
-					[K_USUARIO_RECIBE]		 = @PP_K_USUARIO_ACCION,
-					[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
-					[F_CAMBIO]				 = GETDATE()
-			WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
-			AND		[K_STATUS_ORDEN_TRABAJO] = 40
-			IF @@ROWCOUNT = 0
-			BEGIN
-				SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-				RAISERROR (@VP_MENSAJE, 16, 1 ) 
-			END		
-		--END
-		--ELSE IF @PP_K_ACCION_REALIZADA	= 60		--	ACEPTADA. EL COMENTARIO POR PARTE DEL USUARIO NO ES OBLIGATORIO.
-		--BEGIN
-		--	UPDATE	ORDEN_TRABAJO
-		--	SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
-		--			[C_ORDEN_TRABAJO]		 = [C_ORDEN_TRABAJO] + @PP_C_ORDEN_TRABAJO,
-		--			[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
-		--			[F_CAMBIO]				 = GETDATE()
-		--	WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
-		--	AND		[K_STATUS_ORDEN_TRABAJO] = 40
-		--	IF @@ROWCOUNT = 0
-		--	BEGIN
-		--		SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-		--		RAISERROR (@VP_MENSAJE, 16, 1 ) 
-		--	END
-		--END
-	END
-	--------------------------------------------------------------------------------------------------------------------
-	ELSE	IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (45)	AND @PP_K_ACCION_REALIZADA IN ( 50 , 60 )	--	TERMINADA DESPUES DE RECHAZO, PUEDE PASAR A RECHAZADA O ACEPTADA. COMENTARIO OBLIGATORIO.
-	BEGIN
-		IF	( @PP_C_ORDEN_TRABAJO = '' )
-		BEGIN																
-			SET @VP_MENSAJE='Se debe indicar un COMENTARIO para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-			RAISERROR (@VP_MENSAJE, 16, 1 ) 
-		END
-
-		IF @PP_K_ACCION_REALIZADA	= 50			--	RECHAZADA. EL COMENTARIO POR PARTE DEL USUARIO ES OBLIGATORIO.
-		BEGIN
-			UPDATE	ORDEN_TRABAJO
-			SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
-					[C_ORDEN_TRABAJO]		 = [C_ORDEN_TRABAJO] + '. /[X]/ ' + @PP_C_ORDEN_TRABAJO,
-					[K_USUARIO_RECIBE]		 = @PP_K_USUARIO_ACCION,
-					[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
-					[F_CAMBIO]				 = GETDATE()
-			WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
-			AND		[K_STATUS_ORDEN_TRABAJO] = 45
-			IF @@ROWCOUNT = 0
-			BEGIN
-				SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-				RAISERROR (@VP_MENSAJE, 16, 1 ) 
-			END		
-		END
-		ELSE IF @PP_K_ACCION_REALIZADA	= 60		--	ACEPTADA. EL COMENTARIO POR PARTE DEL USUARIO NO ES OBLIGATORIO.
-		BEGIN
-			UPDATE	ORDEN_TRABAJO
-			SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
-					[C_ORDEN_TRABAJO]		 = [C_ORDEN_TRABAJO] + '. /[OK]/ ' + @PP_C_ORDEN_TRABAJO,
-					[K_USUARIO_RECIBE]		 = @PP_K_USUARIO_ACCION,
-					[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
-					[F_CAMBIO]				 = GETDATE()
-			WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
-			AND		[K_STATUS_ORDEN_TRABAJO] = 45
-			IF @@ROWCOUNT = 0
-			BEGIN
-				SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-				RAISERROR (@VP_MENSAJE, 16, 1 ) 
+				UPDATE	ORDEN_TRABAJO
+				SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
+						[N_TECNICO_REALIZA]		 = @PP_N_TECNICO_REALIZA,
+						[D_TECNICO_REALIZA]		 = @PP_D_TECNICO_REALIZA,
+						[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
+						[F_CAMBIO]				 = GETDATE()
+				WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
+				AND		[K_STATUS_ORDEN_TRABAJO] = 20
+				IF @@ROWCOUNT = 0
+				BEGIN
+					SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+					RAISERROR (@VP_MENSAJE, 16, 1 ) 
+				END
 			END
-		END
-	END
-	--------------------------------------------------------------------------------------------------------------------
-	ELSE	IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (50)	AND @PP_K_ACCION_REALIZADA = 45	--	RECHAZADA, PASA A ESTATUS TERMINADA DESPUES DE RECHAZO
-	BEGIN
-		IF	( @PP_DURACION_TOTAL_MINUTOS = 0 ) OR ( @PP_ACCION_REALIZADA = '' )
-		BEGIN
-			SET @VP_MENSAJE='Se debe indicar la DURACIÓN(rechazo) y/o ACCIÓN REALIZADA(rechazo) para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-			RAISERROR (@VP_MENSAJE, 16, 1 ) 
-		END
+			--------------------------------------------------------------------------------------------------------------------
+			ELSE	IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (30)	AND @PP_K_ACCION_REALIZADA = 40	--	ASIGNADA, PASA A ESTATUS TERMINADA
+			BEGIN
+				IF	( @PP_DURACION_TOTAL_MINUTOS = 0 ) OR ( @PP_ACCION_REALIZADA = '' )
+				BEGIN
+					SET @VP_MENSAJE='Se debe indicar la DURACIÓN y/o ACCIÓN REALIZADA para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+					RAISERROR (@VP_MENSAJE, 16, 1 ) 
+				END
 
-		UPDATE	ORDEN_TRABAJO
-		SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
-				[ACCION_REALIZADA]		 = [ACCION_REALIZADA] + ' /[SOLU]/ ' + @PP_ACCION_REALIZADA,
-				[DURACION_TOTAL_MINUTOS] = [DURACION_TOTAL_MINUTOS] + @PP_DURACION_TOTAL_MINUTOS,
-				[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
-				[F_CAMBIO]				 = GETDATE()
-		WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
-		AND		[K_STATUS_ORDEN_TRABAJO] = 50
-		IF @@ROWCOUNT = 0
-		BEGIN
-			SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
-			RAISERROR (@VP_MENSAJE, 16, 1 ) 
-		END
-	END
-	--------------------------------------------------------------------------------------------------------------------
-	ELSE
-	BEGIN
-		SET @VP_MENSAJE='No se realizó ninguna acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+'], verifique...'
-		RAISERROR (@VP_MENSAJE, 16, 1 )
+				UPDATE	ORDEN_TRABAJO
+				SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
+						[ACCION_REALIZADA]		 = @PP_ACCION_REALIZADA,
+						[DURACION_TOTAL_MINUTOS] = @PP_DURACION_TOTAL_MINUTOS,
+						[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
+						[F_CAMBIO]				 = GETDATE()
+				WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
+				AND		[K_STATUS_ORDEN_TRABAJO] = 30
+				IF @@ROWCOUNT = 0
+				BEGIN
+					SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+					RAISERROR (@VP_MENSAJE, 16, 1 ) 
+				END
+			END
+			--------------------------------------------------------------------------------------------------------------------
+			ELSE	IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (40)	AND @PP_K_ACCION_REALIZADA IN ( 50 , 60 )	--	TERMINADA, PUEDE PASAR A RECHAZADA O ACEPTADA.
+			BEGIN
+				IF	( @PP_C_ORDEN_TRABAJO = '' AND @PP_K_ACCION_REALIZADA	= 50)	--	RECHAZADA. EL COMENTARIO POR PARTE DEL USUARIO ES OBLIGATORIO.
+				BEGIN																--	ACEPTADA. EL COMENTARIO POR PARTE DEL USUARIO NO ES OBLIGATORIO.
+					SET @VP_MENSAJE='Se debe indicar un COMENTARIO para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+					RAISERROR (@VP_MENSAJE, 16, 1 ) 
+				END
+
+				--IF @PP_K_ACCION_REALIZADA	= 50			--	RECHAZADA. EL COMENTARIO POR PARTE DEL USUARIO ES OBLIGATORIO.
+				--BEGIN
+					UPDATE	ORDEN_TRABAJO
+					SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
+							[C_ORDEN_TRABAJO]		 = @PP_C_ORDEN_TRABAJO,
+							[K_USUARIO_RECIBE]		 = @PP_K_USUARIO_ACCION,
+							[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
+							[F_CAMBIO]				 = GETDATE()
+					WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
+					AND		[K_STATUS_ORDEN_TRABAJO] = 40
+					IF @@ROWCOUNT = 0
+					BEGIN
+						SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+						RAISERROR (@VP_MENSAJE, 16, 1 ) 
+					END		
+				--END
+				--ELSE IF @PP_K_ACCION_REALIZADA	= 60		--	ACEPTADA. EL COMENTARIO POR PARTE DEL USUARIO NO ES OBLIGATORIO.
+				--BEGIN
+				--	UPDATE	ORDEN_TRABAJO
+				--	SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
+				--			[C_ORDEN_TRABAJO]		 = [C_ORDEN_TRABAJO] + @PP_C_ORDEN_TRABAJO,
+				--			[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
+				--			[F_CAMBIO]				 = GETDATE()
+				--	WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
+				--	AND		[K_STATUS_ORDEN_TRABAJO] = 40
+				--	IF @@ROWCOUNT = 0
+				--	BEGIN
+				--		SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+				--		RAISERROR (@VP_MENSAJE, 16, 1 ) 
+				--	END
+				--END
+			END
+			--------------------------------------------------------------------------------------------------------------------
+			ELSE	IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (45)	AND @PP_K_ACCION_REALIZADA IN ( 50 , 60 )	--	TERMINADA DESPUES DE RECHAZO, PUEDE PASAR A RECHAZADA O ACEPTADA. COMENTARIO OBLIGATORIO.
+			BEGIN
+				IF	( @PP_C_ORDEN_TRABAJO = '' )
+				BEGIN																
+					SET @VP_MENSAJE='Se debe indicar un COMENTARIO para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+					RAISERROR (@VP_MENSAJE, 16, 1 ) 
+				END
+
+				IF @PP_K_ACCION_REALIZADA	= 50			--	RECHAZADA. EL COMENTARIO POR PARTE DEL USUARIO ES OBLIGATORIO.
+				BEGIN
+					UPDATE	ORDEN_TRABAJO
+					SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
+							[C_ORDEN_TRABAJO]		 = [C_ORDEN_TRABAJO] + '. /[X]/ ' + @PP_C_ORDEN_TRABAJO,
+							[K_USUARIO_RECIBE]		 = @PP_K_USUARIO_ACCION,
+							[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
+							[F_CAMBIO]				 = GETDATE()
+					WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
+					AND		[K_STATUS_ORDEN_TRABAJO] = 45
+					IF @@ROWCOUNT = 0
+					BEGIN
+						SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+						RAISERROR (@VP_MENSAJE, 16, 1 ) 
+					END		
+				END
+				ELSE IF @PP_K_ACCION_REALIZADA	= 60		--	ACEPTADA. EL COMENTARIO POR PARTE DEL USUARIO NO ES OBLIGATORIO.
+				BEGIN
+					UPDATE	ORDEN_TRABAJO
+					SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
+							[C_ORDEN_TRABAJO]		 = [C_ORDEN_TRABAJO] + '. /[OK]/ ' + @PP_C_ORDEN_TRABAJO,
+							[K_USUARIO_RECIBE]		 = @PP_K_USUARIO_ACCION,
+							[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
+							[F_CAMBIO]				 = GETDATE()
+					WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
+					AND		[K_STATUS_ORDEN_TRABAJO] = 45
+					IF @@ROWCOUNT = 0
+					BEGIN
+						SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+						RAISERROR (@VP_MENSAJE, 16, 1 ) 
+					END
+				END
+			END
+			--------------------------------------------------------------------------------------------------------------------
+			ELSE	IF	 ( @VP_K_ESTATUS_ORDEN_BD ) IN (50)	AND @PP_K_ACCION_REALIZADA = 45	--	RECHAZADA, PASA A ESTATUS TERMINADA DESPUES DE RECHAZO
+			BEGIN
+				IF	( @PP_DURACION_TOTAL_MINUTOS = 0 ) OR ( @PP_ACCION_REALIZADA = '' )
+				BEGIN
+					SET @VP_MENSAJE='Se debe indicar la DURACIÓN(rechazo) y/o ACCIÓN REALIZADA(rechazo) para completar la acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+					RAISERROR (@VP_MENSAJE, 16, 1 ) 
+				END
+
+				UPDATE	ORDEN_TRABAJO
+				SET		[K_STATUS_ORDEN_TRABAJO] = @PP_K_ACCION_REALIZADA,
+						[ACCION_REALIZADA]		 = [ACCION_REALIZADA] + ' /[SOLU]/ ' + @PP_ACCION_REALIZADA,
+						[DURACION_TOTAL_MINUTOS] = [DURACION_TOTAL_MINUTOS] + @PP_DURACION_TOTAL_MINUTOS,
+						[K_USUARIO_CAMBIO]		 = @PP_K_USUARIO_ACCION,
+						[F_CAMBIO]				 = GETDATE()
+				WHERE	[K_ORDEN_TRABAJO]		 = @PP_K_ORDEN_TRABAJO
+				AND		[K_STATUS_ORDEN_TRABAJO] = 50
+				IF @@ROWCOUNT = 0
+				BEGIN
+					SET @VP_MENSAJE='El registro no se actualizó. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+']'
+					RAISERROR (@VP_MENSAJE, 16, 1 ) 
+				END
+			END
+			--------------------------------------------------------------------------------------------------------------------
+			ELSE
+			BEGIN
+				SET @VP_MENSAJE='No se realizó ninguna acción. [OTR#'+CONVERT(VARCHAR(10),@PP_K_ORDEN_TRABAJO)+'], verifique...'
+				RAISERROR (@VP_MENSAJE, 16, 1 )
+			END
 	END
 	--	[K_ESTACION]			 = @PP_K_ESTACION,
 	--	[K_SUB_ESTACION]		 = @PP_K_SUB_ESTACION,
@@ -841,8 +952,9 @@ CREATE PROCEDURE [dbo].[PG_IN_ORDEN_TRABAJO_DESDE_TPO]
 	@PP_K_SISTEMA_EXE				INT,
 	@PP_K_USUARIO_ACCION			INT,
 	 -- ===========================
-	@PP_K_TPO_CUSTOMER 				INT
+	@PP_K_TPO_CUSTOMER 				INT,
 	 -- ===========================
+	@PP_ARRAY_K_TPO_CUSTOMER_DET_SET_COTIZADO	NVARCHAR(MAX)= ''
 AS			
 DECLARE  @VP_MENSAJE				NVARCHAR(MAX)	= ''
 		,@VP_K_ORDEN_TRABAJO		INT				= 0
@@ -928,15 +1040,223 @@ BEGIN TRY
 		--											--@PP_ACCIONES_ORDEN_TRABAJO,
 		--											--@PP_C_ORDEN_TRABAJO
 
-		UPDATE	[TPO_CUSTOMER_DET_SET_COTIZADO]
-		SET		[K_STATUS_SET_COTIZADO]	= 2,
-				[K_ORDEN_TRABAJO]		= @VP_K_ORDEN_TRABAJO
-		WHERE	[K_TPO_CUSTOMER]		= @PP_K_TPO_CUSTOMER
-		AND		[L_HECHO_EN_PEARL]		= 1
-		AND		[K_STATUS_SET_COTIZADO]	= 1
-		IF @@ROWCOUNT = 0
+	-----=====================================================
+	DECLARE	@PP_K_TPO_ARRAY	NVARCHAR(MAX) = @PP_ARRAY_K_TPO_CUSTOMER_DET_SET_COTIZADO
+		-----=====================================================
+	DECLARE  @VP_POSICION_K_TPO		INT
+			,@VP_VALOR_K_TPO		VARCHAR(500)
+	-------------------------------------------------------------
+	-------------------------------------------------------------
+	--Colocamos un separador al final de los parametros para que funcione bien nuestro codigo
+	SET	@PP_K_TPO_ARRAY	= @PP_K_TPO_ARRAY	+ '/'	
+	--Hacemos un bucle que se repite mientras haya separadores, patindex busca un patron en una cadena y nos devuelve su posicion
+	WHILE patindex('%/%' , @PP_K_TPO_ARRAY) <> 0
 		BEGIN
-			RAISERROR ('ERROR: No fue posible actualizar el registro de la [ORDEN_TRABAJO]', 16, 1 ) 
+			SELECT @VP_POSICION_K_TPO	=	patindex('%/%' , @PP_K_TPO_ARRAY	)
+			--Buscamos la posicion de la primera y obtenemos los caracteres hasta esa posicion
+			SELECT @VP_VALOR_K_TPO		= LEFT(@PP_K_TPO_ARRAY	, @VP_POSICION_K_TPO	- 1)
+				-- =========================================================================================================
+
+					UPDATE	[TPO_CUSTOMER_DET_SET_COTIZADO]
+					SET		[K_STATUS_SET_COTIZADO]	= 2,
+							[K_ORDEN_TRABAJO]		= @VP_K_ORDEN_TRABAJO
+					--WHERE	[K_TPO_CUSTOMER]		= @PP_K_TPO_CUSTOMER
+					WHERE	[K_TPO_CUSTOMER_DET_SET_COTIZADO]	= @VP_VALOR_K_TPO
+					AND		[L_HECHO_EN_PEARL]					= 1
+					AND		[K_STATUS_SET_COTIZADO]				= 1
+					IF @@ROWCOUNT = 0
+					BEGIN
+						RAISERROR ('ERROR: No fue posible actualizar el registro de la [ORDEN_TRABAJO]', 16, 1 ) 
+					END
+				-- =========================================================================================================
+			--Reemplazamos lo procesado con nada con la funcion stuff
+			SELECT @PP_K_TPO_ARRAY		= STUFF(@PP_K_TPO_ARRAY		, 1, @VP_POSICION_K_TPO, '')
+		END
+-- /////////////////////////////////////////////////////////////////////
+COMMIT TRANSACTION 
+END TRY
+
+BEGIN CATCH
+	/* Ocurrió un error, deshacemos los cambios*/ 
+	ROLLBACK TRANSACTION
+	DECLARE @VP_ERROR_TRANS NVARCHAR(4000);
+	SET @VP_ERROR_TRANS = ERROR_MESSAGE() 
+	SET @VP_MENSAJE = 'ERROR:// ' + @VP_ERROR_TRANS
+END CATCH	
+	-- /////////////////////////////////////////////////////////////////////	
+	IF @VP_MENSAJE<>''
+	BEGIN
+		SET		@VP_MENSAJE = 'No es posible [Insertar]: ' + @VP_MENSAJE 
+	END
+	SELECT	@VP_MENSAJE AS MENSAJE, FORMAT(@VP_K_ORDEN_TRABAJO,'000000') AS CLAVE
+	-- //////////////////////////////////////////////////////////////
+GO
+
+
+-- //////////////////////////////////////////////////////////////
+-- // STORED PROCEDURE ---> INSERT
+-- //////////////////////////////////////////////////////////////
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_IN_ORDEN_TRABAJO_DESDE_TOOL_SET]') AND type in (N'P', N'PC'))
+	DROP PROCEDURE [dbo].[PG_IN_ORDEN_TRABAJO_DESDE_TOOL_SET]
+GO
+--		 EXECUTE [dbo].[PG_IN_ORDEN_TRABAJO_DESDE_TOOL_SET] 0,139,'10/6'
+CREATE PROCEDURE [dbo].[PG_IN_ORDEN_TRABAJO_DESDE_TOOL_SET]
+	@PP_K_SISTEMA_EXE				INT,
+	@PP_K_USUARIO_ACCION			INT,
+	 -- ===========================
+	 -- ===========================
+	@PP_ARRAY_K_TOOL_SET			NVARCHAR(MAX)= ''
+AS			
+DECLARE  @VP_MENSAJE				NVARCHAR(MAX)	= ''
+		,@VP_K_ORDEN_TRABAJO		INT				= 0
+		--,@VP_D_USUARIO_SOLICITA		VARCHAR(500)
+BEGIN TRANSACTION 
+BEGIN TRY
+	-- /////////////////////////////////////////////////////////////////////
+	--============================================================================
+	--======================================INSERTAR EL ENCABEZADO DE LA ORDEN TRABAJO
+	--============================================================================
+		INSERT INTO ORDEN_TRABAJO
+			(	[K_USUARIO_SOLICITA]			,	[K_USUARIO_RECIBE]			,	--	1
+				-- ============================
+				[K_STATUS_ORDEN_TRABAJO]		,									--	2
+				-- ============================
+				[K_ESTACION]					,	[K_SUB_ESTACION]			,	--	3
+				-- ============================
+				[D_ORDEN_TRABAJO]				,	
+				[F_ORDEN_TRABAJO]				,	--	4
+				-- ============================
+				[DURACION_TOTAL_MINUTOS]		,									--	5
+				-- ============================	
+				[K_TIPO_ORDEN_TRABAJO]			,	[K_MOTIVO_ORDEN_TRABAJO]	,	--	6
+				-- ============================	
+				[RUTA_ORDEN_TRABAJO]			,									--	7
+				[N_TECNICO_REALIZA]				,	[D_TECNICO_REALIZA]			,	--	8
+				-- =========================
+				[ACCION_REALIZADA]				,									--	9		[DURACION_MINUTOS]				,	
+				[C_ORDEN_TRABAJO]				,									--	10
+				-- ===========================
+				[K_USUARIO_ALTA], [F_ALTA], [K_USUARIO_CAMBIO], [F_CAMBIO],
+				[L_BORRADO], [K_USUARIO_BAJA], [F_BAJA]  )
+		VALUES	
+			(	@PP_K_USUARIO_ACCION			,	0							,	--	1
+				-- ============================
+				20								,									--	2					--	#1: ES EL ESTATUS INICIAL DE @PP_K_STATUS_ORDEN_TRABAJO	,
+				-- ============================
+				24								,	0							,	--	3
+				-- ============================
+				'Se hace la solicitud del mantenimiento de los siguientes herramentales:',	
+				GETDATE()					,	--	4
+				-- ============================
+				0								,									--	5
+				-- ============================
+				1								,	0							,	--	6
+				-- ============================
+				''								,									--	7
+				0								,	''							,	--	8
+				-- =========================
+				''								,									--	9
+				''								,									--	10
+				-- ============================
+				@PP_K_USUARIO_ACCION, GETDATE(), @PP_K_USUARIO_ACCION, GETDATE(),	
+				0, NULL, NULL  )
+
+			IF @@ROWCOUNT = 0
+			BEGIN
+				SET @VP_MENSAJE='El registro no se ingresó.'
+				RAISERROR (@VP_MENSAJE, 16, 1 ) 
+			END
+			ELSE
+			BEGIN
+				SELECT @VP_K_ORDEN_TRABAJO	= SCOPE_IDENTITY()
+
+				IF	( @VP_K_ORDEN_TRABAJO	= 0 OR @VP_K_ORDEN_TRABAJO IS NULL )
+				BEGIN
+					RAISERROR ('Error en la asignación de identidad.', 16, 1 ) 
+				END
+			END
+
+		-- /////////////////////////////////////////////////////////////////////-- /////////////////////////////////////////////////////////////////////
+	-----=====================================================
+	-----=====================================================
+	DECLARE  @VP_K_TOOL_POSICION	INT
+			,@VP_K_TOOL_VALOR		VARCHAR(500)
+			,@VP_CONTADOR			INT	= 0
+	-------------------------------------------------------------
+	-------------------------------------------------------------
+	--Colocamos un separador al final de los parametros para que funcione bien nuestro codigo
+	SET	@PP_ARRAY_K_TOOL_SET	= @PP_ARRAY_K_TOOL_SET	+ '/'	
+	--Hacemos un bucle que se repite mientras haya separadores, patindex busca un patron en una cadena y nos devuelve su posicion
+	WHILE patindex('%/%' , @PP_ARRAY_K_TOOL_SET) <> 0
+		BEGIN
+			SELECT @VP_K_TOOL_POSICION	=	patindex('%/%' , @PP_ARRAY_K_TOOL_SET	)
+			--Buscamos la posicion de la primera y obtenemos los caracteres hasta esa posicion
+			SELECT @VP_K_TOOL_VALOR		= LEFT(@PP_ARRAY_K_TOOL_SET	, @VP_K_TOOL_POSICION	- 1)
+				-- =========================================================================================================
+					DECLARE	 @VP_STATUS_TOOL_SET			INTEGER = 0
+							,@VP_NO_PARTE_PEARL_PATTERN		VARCHAR(250)=''
+							,@VP_TOOL_SET_ID_TAG			VARCHAR(250)=''					
+					SELECT	@VP_STATUS_TOOL_SET			= K_STATUS_TOOL_SET,
+							@VP_NO_PARTE_PEARL_PATTERN	= NO_PARTE_PEARL_PATTERN,
+							@VP_TOOL_SET_ID_TAG			= TOOL_SET_ID_TAG
+					FROM	TOOL_SET		(NOLOCK)
+					WHERE	K_TOOL_SET		= @VP_K_TOOL_VALOR
+
+
+					IF ISNULL(	( 	@VP_STATUS_TOOL_SET	), 0) IN (0,10,40,60,70)
+					BEGIN
+						SET	@VP_MENSAJE	= 'Estatus no válido para realizar la acción. [PEARL: '  + @VP_NO_PARTE_PEARL_PATTERN + ' // ID_TAG: ' + @VP_TOOL_SET_ID_TAG + ']'
+						RAISERROR (@VP_MENSAJE, 16, 1 ) 
+					END
+
+					UPDATE	TOOL_SET
+					SET		K_STATUS_TOOL_SET	= 40,
+							K_ORDEN_TRABAJO		= @VP_K_ORDEN_TRABAJO
+					WHERE	K_TOOL_SET			= @VP_K_TOOL_VALOR
+					AND		L_BORRADO			= 0
+					AND		K_ORDEN_TRABAJO		= 0
+					IF @@ROWCOUNT = 0
+					BEGIN
+						RAISERROR ('ERROR: No fue posible actualizar el registro de la [ORDEN_TRABAJO]', 16, 1 ) 
+					END
+
+					INSERT INTO TOOL_SET_ORDEN_TRABAJO
+					SELECT	@VP_K_ORDEN_TRABAJO,
+							[K_TOOL_SET],
+							[K_TPO_CUSTOMER_DET_SET_COTIZADO],
+							[K_TPO_CUSTOMER]			,
+							[K_CUSTOMER]				,	
+							[K_TOOL_SET_COLOR]			,
+							[CUS_NO]					,	[MODELNO]					,
+							[NO_PARTE_PEARL_PATTERN]	,
+							-- =========================
+							-- TOOL IDENTIFICATION NUMBE
+							[TOOL_SET_ID]				,
+							-- =========================
+							[D_TOOL_SET]				,	[K_TOOL_SET_ROW]			,
+							-- =========================
+							--	TOOL TAG
+							[TOOL_SET_ID_TAG]			,	[K_TOOL_SET_CODE]			,
+							[TOOL_SET_CODE_01]			,	[TOOL_SET_CODE_02]			,
+							-- =========================
+							[K_TOOL_SET_SUPPLIER]		,	0,--[TOOL_SET_CANTIDAD_RECIBIDA],	
+							[F_STATUS_TOOL_SET]			
+					FROM	TOOL_SET
+					WHERE	K_TOOL_SET	= @VP_K_TOOL_VALOR	--2
+					IF @@ROWCOUNT = 0
+					BEGIN
+						RAISERROR ('ERROR: No fue posible insertar el registro de la [SET_ORDEN_TRABAJO]', 16, 1 ) 
+					END
+
+					SET @VP_CONTADOR += 1
+
+					IF @VP_CONTADOR > 12
+					BEGIN
+						RAISERROR ('Sólo es posible incluir 12 dados por orden de Mantenimiento.', 16, 1 ) 
+					END
+				-- =========================================================================================================
+			--Reemplazamos lo procesado con nada con la funcion stuff
+			SELECT @PP_ARRAY_K_TOOL_SET		= STUFF(@PP_ARRAY_K_TOOL_SET		, 1, @VP_K_TOOL_POSICION, '')
 		END
 -- /////////////////////////////////////////////////////////////////////
 COMMIT TRANSACTION 
@@ -961,13 +1281,67 @@ GO
 
 -- //////////////////////////////////////////////////////////////
 -- // STORED PROCEDURE ---> ENVIAR CORREO
--- // CUANDO LA ORDEN DE COMPRA ES APROBADA POR GERENCIA DE PLANTA SE HACE EL ENVIO DE LA [PO] POR MEDIO ELECTRONICO.
 -- //////////////////////////////////////////////////////////////
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_PR_ENVIAR_CORREO_ORDEN_TRABAJO]') AND type in (N'P', N'PC'))
 	DROP PROCEDURE [dbo].[PG_PR_ENVIAR_CORREO_ORDEN_TRABAJO]
 GO
 --		 EXECUTE [dbo].[PG_PR_ENVIAR_CORREO_ORDEN_TRABAJO]	1,139,  1,''
 CREATE PROCEDURE [dbo].[PG_PR_ENVIAR_CORREO_ORDEN_TRABAJO]
+	@PP_K_SISTEMA_EXE				INT,
+	@PP_K_USUARIO_ACCION			INT,
+	-- ===========================
+	@PP_VALOR_ORDEN_TRABAJO			INT
+AS
+	DECLARE	 @VP_MENSAJE					NVARCHAR(MAX)
+			,@VP_RECIPIENTS					NVARCHAR(MAX)	= ''
+			,@VP_SUBJECT					NVARCHAR(MAX) 
+			,@VP_BODY_HTML					NVARCHAR(MAX) 
+			,@VP_ID_MAIL					INT
+			,@VP_SENT_STATUS				VARCHAR(500)
+			,@VP_CLIENTE					VARCHAR(250)
+			,@VP_K_CUSTOMER					INT
+			,@VP_K_TIPO_GRUPO_APROBADOR		VARCHAR(15)	=	110
+	----================================================================
+	----================================================================
+	SELECT  @VP_RECIPIENTS	=	@VP_RECIPIENTS + ';' + CORREO_USUARIO_PEARL
+	FROM	BD_GENERAL.dbo.USUARIO_PEARL AS USERS  (NOLOCK) 
+	INNER	JOIN	BD_GENERAL.dbo.GRUPO_APROBADOR (NOLOCK) ON GRUPO_APROBADOR.K_USUARIO	= USERS.K_USUARIO_PEARL
+	WHERE	GRUPO_APROBADOR.K_TIPO_GRUPO_APROBADOR			= @VP_K_TIPO_GRUPO_APROBADOR
+	AND		K_ESTATUS_GRUPO_APROBADOR						= 1
+
+	SET @VP_RECIPIENTS = SUBSTRING(@VP_RECIPIENTS,2,LEN(@VP_RECIPIENTS))
+	----================================================================
+	----================================================================
+	----================================================================
+		SET @VP_SUBJECT = 'PEARL LEATHER [ORDEN_TRABAJO#' + CONVERT(VARCHAR(10),FORMAT(@PP_VALOR_ORDEN_TRABAJO,'000000')) +']'--CONVERT(VARCHAR(10),FORMAT(@VP_VALOR_PO,'000000'))+']'
+	
+	SET @VP_BODY_HTML =  
+	N'<p style="color:black; font-size:12.0pt;font-family:"Calisto MT",serif">'+
+	N'Buen día, se ha realizado una solicitud de orden de trabajo.<br>'+
+	N'El registro ya se encuentra generado con el estatus de [ENVIADA] para le sea asignado un técnico. Favor de realizar el seguimiento correspondiente.<br><br>'+
+	N'Este correo fue generado automáticamente por el sistema PEARL.<br><br>'+
+	N'Saludos.<br> == = == = == = == = == = == = == = == = == = == = == = == = == = == = ==<br></p> <p>'
+	
+	EXEC msdb.dbo.sp_send_dbmail @recipients=@VP_RECIPIENTS,
+--		@copy_recipients = 'ALEJANDROD@PEARLLEATHER.COM.MX',
+	@blind_copy_recipients='ALEJANDROD@PEARLLEATHER.COM.MX',
+	@subject = @VP_SUBJECT,
+	@body = @VP_BODY_HTML,  
+	@body_format = 'HTML',
+	@mailitem_id = @VP_ID_MAIL OUTPUT;
+
+-- /////////////////////////////////////////////////////////////////////
+GO
+
+
+-- //////////////////////////////////////////////////////////////
+-- // STORED PROCEDURE ---> ENVIAR CORREO
+-- //////////////////////////////////////////////////////////////
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_PR_ENVIAR_CORREO_ORDEN_TRABAJO_HERRAMENTAL]') AND type in (N'P', N'PC'))
+	DROP PROCEDURE [dbo].[PG_PR_ENVIAR_CORREO_ORDEN_TRABAJO_HERRAMENTAL]
+GO
+--		 EXECUTE [dbo].[PG_PR_ENVIAR_CORREO_ORDEN_TRABAJO_HERRAMENTAL]	1,139,  1,''
+CREATE PROCEDURE [dbo].[PG_PR_ENVIAR_CORREO_ORDEN_TRABAJO_HERRAMENTAL]
 	@PP_K_SISTEMA_EXE				INT,
 	@PP_K_USUARIO_ACCION			INT,
 	-- ===========================
@@ -986,14 +1360,14 @@ BEGIN TRY
 			,@VP_SENT_STATUS	VARCHAR(500)
 			,@VP_CLIENTE		VARCHAR(250)
 			,@VP_K_CUSTOMER		INT
-			,@VP_K_TIPO_GRUPO_APROBADOR		VARCHAR(15)	=	9800
+			,@VP_K_TIPO_GRUPO_APROBADOR		VARCHAR(15)	=	110
 	----================================================================
 	----================================================================
-	--SELECT  @VP_RECIPIENTS	=	@VP_RECIPIENTS + ';' + CORREO_USUARIO_PEARL
-	--FROM	BD_GENERAL.dbo.USUARIO_PEARL AS USERS  (NOLOCK) 
-	--INNER	JOIN	BD_GENERAL.dbo.GRUPO_APROBADOR (NOLOCK) ON GRUPO_APROBADOR.K_USUARIO	= USERS.K_USUARIO_PEARL
-	--WHERE	GRUPO_APROBADOR.K_TIPO_GRUPO_APROBADOR			= @VP_K_TIPO_GRUPO_APROBADOR
-	--AND		K_ESTATUS_GRUPO_APROBADOR						= 1
+	SELECT  @VP_RECIPIENTS	=	@VP_RECIPIENTS + ';' + CORREO_USUARIO_PEARL
+	FROM	BD_GENERAL.dbo.USUARIO_PEARL AS USERS  (NOLOCK) 
+	INNER	JOIN	BD_GENERAL.dbo.GRUPO_APROBADOR (NOLOCK) ON GRUPO_APROBADOR.K_USUARIO	= USERS.K_USUARIO_PEARL
+	WHERE	GRUPO_APROBADOR.K_TIPO_GRUPO_APROBADOR			= @VP_K_TIPO_GRUPO_APROBADOR
+	AND		K_ESTATUS_GRUPO_APROBADOR						= 1
 
 	SET @VP_RECIPIENTS = SUBSTRING(@VP_RECIPIENTS,2,LEN(@VP_RECIPIENTS))
 	----================================================================
@@ -1006,7 +1380,7 @@ BEGIN TRY
 
 		IF	@PP_FILE_PATH IS NULL OR @PP_FILE_PATH = ''
 		BEGIN
-			RAISERROR ('ERROR: No fue encontrar el archivo de la [ORDEN_TRABAJO], informe a sistemas.', 16, 1 ) 
+			RAISERROR ('ERROR: No fue posible encontrar el archivo de la [ORDEN_TRABAJO], informe a sistemas.', 16, 1 ) 
 		END
 	END
 
