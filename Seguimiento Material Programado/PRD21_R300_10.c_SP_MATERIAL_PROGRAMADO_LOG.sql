@@ -162,7 +162,7 @@ AS
 	FROM ccjoblin_sql  (NOLOCK)
 	INNER JOIN ccjobhdr_sql (NOLOCK) ON ccjoblin_sql.jobno = ccjobhdr_sql.jobno 
 		AND status = 'P'
-		AND ccjobhdr_sql.JOBNO < 50000
+		--AND ccjobhdr_sql.JOBNO < 50000
 	-- ===========================
 	INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
 	AND		ccjoblin_sql.customer = cccusitm_sql.cus_no
@@ -299,7 +299,7 @@ AS
 	FROM ccjoblin_sql  (NOLOCK)
 	INNER JOIN ccjobhdr_sql (NOLOCK) ON ccjoblin_sql.jobno = ccjobhdr_sql.jobno 
 		AND status = 'P'
-		AND ccjobhdr_sql.JOBNO < 50000
+		--AND ccjobhdr_sql.JOBNO < 50000
 	-- ===========================
 	INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
 	AND		ccjoblin_sql.customer = cccusitm_sql.cus_no
