@@ -1477,8 +1477,8 @@ AS
 	@blind_copy_recipients='ALEJANDROD@PEARLLEATHER.COM.MX',
 	@subject = @VP_SUBJECT,
 	@body = @VP_BODY_HTML,  
-	@body_format = 'HTML',
-	@mailitem_id = @VP_ID_MAIL OUTPUT;
+	@body_format = 'HTML';
+	--@mailitem_id = @VP_ID_MAIL OUTPUT;
 
 -- /////////////////////////////////////////////////////////////////////
 GO
