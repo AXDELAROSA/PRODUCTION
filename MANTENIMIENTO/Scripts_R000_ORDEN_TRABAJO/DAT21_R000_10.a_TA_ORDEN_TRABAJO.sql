@@ -122,7 +122,7 @@ EXECUTE [dbo].[PG_CI_STATUS_ORDEN_TRABAJO] 0,139,60, 'ACEPTADA',					'', 'ACEPT'
 EXECUTE [dbo].[PG_CI_STATUS_ORDEN_TRABAJO] 0,139,70, 'CERRADA PARCIAL',				'', 'PARCL',	70,0		-- CERRADA PARCIAL
 -- =================================================================================
 GO
-select * from bd_general.dbo.USUARIO_PEARL	
+--select * from bd_general.dbo.USUARIO_PEARL	
 
 -- ////////////////////////////////////////////////////////////////
 -- //					ESTACION_TRABAJO
@@ -706,68 +706,3 @@ EXECUTE [dbo].[PG_CI_TIPO_ORDEN_TRABAJO] 0, 0, 73,'Tubería dañada', 1				, 1
 EXECUTE [dbo].[PG_CI_TIPO_ORDEN_TRABAJO] 0, 0, 74,'Vibración', 1					, 1
 -- =================================================================================
 GO
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
