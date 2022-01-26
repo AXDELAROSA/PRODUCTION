@@ -125,6 +125,9 @@ AS
 				IF (@VP_PART_NO = '' OR @VP_QTY = '' OR  @VP_SERIAL_1 = '' OR @VP_CUSTNO = '' OR @VP_CLIENTE = '' OR @VP_PRODUCT_CAT = '' OR @VP_LOTE_1 = '')
 					RAISERROR ('Los datos obtenidos de la etiqueta son incorrectos.', 16, 1 ) --MENSAJE - Severity -State.
 
+				-- APLICAR CAMBIO CUANDO SE ESTE IMPRIMIENDO LA ETIQUETA CON EL MODELO Y VERSION
+				DECLARE @VP_MODELO VARCHAR(10) =  LEFT(LTRIM(RTRIM(@VP_PRODUCT_CAT)), 3)
+
 				-- ///////SE OBTIENEN LOS DATOS DEL KIT PROGRAMADO//////////////////////////////////////////////
 				DECLARE @VP_ITEM_NO_PROGRAMADO VARCHAR(100) = ''
 				DECLARE @VP_VERSION VARCHAR(100) = ''
@@ -168,7 +171,7 @@ AS
 						SELECT @VP_N_KIT_RUTA_EVENTO =  COUNT(K_KIT_RUTA)
 						FROM KIT_RUTA (NOLOCK)
 						WHERE ITEM_NO = @VP_ITEM_NO_PROGRAMADO
-						AND MODELNO = @VP_PRODUCT_CAT
+						AND MODELNO = @VP_MODELO -- @VP_PRODUCT_CAT
 						AND VERSIONNO = @VP_VERSION
 						AND K_KIT_RUTA_EVENTO =  @VP_TIPO_EVENTO_KIT
 
@@ -183,7 +186,7 @@ AS
 						FROM KIT_RUTA (NOLOCK)
 						INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
 						WHERE ITEM_NO = @VP_ITEM_NO_PROGRAMADO
-						AND MODELNO = @VP_PRODUCT_CAT
+						AND MODELNO = @VP_MODELO --@VP_PRODUCT_CAT
 						AND VERSIONNO = @VP_VERSION
 						AND KIT_RUTA.K_KIT_RUTA_EVENTO =  @VP_TIPO_EVENTO_KIT
 
@@ -208,7 +211,7 @@ AS
 						SELECT @VP_O_KIT_RUTA_EVENTO_ACTUAL = O_KIT_RUTA_EVENTO
 						FROM KIT_RUTA (NOLOCK)
 						WHERE ITEM_NO = @VP_ITEM_NO_PROGRAMADO
-						AND MODELNO = @VP_PRODUCT_CAT
+						AND MODELNO = @VP_MODELO -- @VP_PRODUCT_CAT
 						AND VERSIONNO = @VP_VERSION
 						AND K_KIT_RUTA_EVENTO =  @VP_KIT_EVENTO_ACTUAL
 
@@ -226,7 +229,7 @@ AS
 						FROM KIT_RUTA (NOLOCK)
 						INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
 						WHERE ITEM_NO = @VP_ITEM_NO_PROGRAMADO
-						AND MODELNO = @VP_PRODUCT_CAT
+						AND MODELNO = @VP_MODELO -- @VP_PRODUCT_CAT
 						AND VERSIONNO = @VP_VERSION
 						AND KIT_RUTA.O_KIT_RUTA_EVENTO >  @VP_O_KIT_RUTA_EVENTO_ACTUAL
 
@@ -288,18 +291,18 @@ AS
 	
 	-- //////////////////////////////////////////////////////////////
 
-	EXECUTE BD_GENERAL.[dbo].[PG_IN_BITACORA_SYS_OPERACION]	@PP_K_SISTEMA_EXE, @PP_K_USUARIO_ACCION,
-													-- ===========================================
-													2,		-- 0 al 6 // @PP_K_IMPORTANCIA_BITACORA_SYS	[INT],	
-													'PROCESO',
-													'',
-													-- ===========================================
-													'[PR]', -- @PP_STORED_PROCEDURE			[VARCHAR] (100),
-													0, 0, 		-- @PP_K_FOLIO_1, @PP_K_FOLIO_2,
-													-- === [INT], [INT], [VARCHAR](100), [VARCHAR](100), DECIMAL(19,4), DECIMAL(19,4),
-													0, 0, @PP_USUARIO_EVENTO, '' , 0.00, 0.00,
-													-- === @PP_VALOR_1 al 6_DATO
-													'', '', '', '', '', ''
+	--EXECUTE BD_GENERAL.[dbo].[PG_IN_BITACORA_SYS_OPERACION]	@PP_K_SISTEMA_EXE, @PP_K_USUARIO_ACCION,
+	--												-- ===========================================
+	--												2,		-- 0 al 6 // @PP_K_IMPORTANCIA_BITACORA_SYS	[INT],	
+	--												'PROCESO',
+	--												'',
+	--												-- ===========================================
+	--												'[PR]', -- @PP_STORED_PROCEDURE			[VARCHAR] (100),
+	--												0, 0, 		-- @PP_K_FOLIO_1, @PP_K_FOLIO_2,
+	--												-- === [INT], [INT], [VARCHAR](100), [VARCHAR](100), DECIMAL(19,4), DECIMAL(19,4),
+	--												0, 0, @PP_USUARIO_EVENTO, '' , 0.00, 0.00,
+	--												-- === @PP_VALOR_1 al 6_DATO
+	--												'', '', '', '', '', ''
 
 	-- ////////////////////////////////////////////////////////////////////
 GO

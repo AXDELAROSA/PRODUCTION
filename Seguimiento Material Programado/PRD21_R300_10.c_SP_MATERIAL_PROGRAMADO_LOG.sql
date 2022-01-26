@@ -299,6 +299,7 @@ AS
 	FROM ccjoblin_sql  (NOLOCK)
 	INNER JOIN ccjobhdr_sql (NOLOCK) ON ccjoblin_sql.jobno = ccjobhdr_sql.jobno 
 		AND status = 'P'
+		AND ccjobhdr_sql.JOBNO < 60000 -- ADD BY  RAFAELF 2022-01-11
 		--AND ccjobhdr_sql.JOBNO < 50000
 	-- ===========================
 	INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
@@ -383,7 +384,7 @@ GO
 -- //////////////////////////////////////////////////////////////
 -- // STORED PROCEDURE ---> RN_EXISTE
 -- //////////////////////////////////////////////////////////////
-
+-- USE DATA_02PRUEBAS
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_GET_DATO_ETIQUETA_KIT]') AND type in (N'P', N'PC'))
 	DROP PROCEDURE [dbo].[PG_GET_DATO_ETIQUETA_KIT]
 GO
@@ -468,7 +469,6 @@ AS
 			SET @VP_PRODUCT_CAT = SUBSTRING(@PP_ETIQUETA_EMBARQUE, (1 + @VP_POSICION_NUMERAL), (@VP_POSICION_ARROBA - (@VP_POSICION_NUMERAL + 1)))
 
 			 -------------------------OBTENER LOTE_1---------------------------------------------------------------------------------
-
 			SET @VP_LOTE_1 = SUBSTRING(@PP_ETIQUETA_EMBARQUE, (1 + @VP_POSICION_ARROBA), 10)
 		END
 	ELSE
