@@ -190,20 +190,9 @@ AS
 												WHERE KIT_RUTA.ITEM_NO = SMPL.ITEM_NO
 												AND KIT_RUTA.MODELNO = SMPL.MODEL_NO
 												AND KIT_RUTA.VERSIONNO = SMPL.VERSION_NO
-												AND KIT_RUTA.K_KIT_RUTA_EVENTO = (	SELECT TOP 1 K_TIPO_EVENTO_KIT 
+												AND KIT_RUTA.K_KIT_RUTA_EVENTO = ISNULL( (SELECT TOP 1 K_TIPO_EVENTO_KIT 
 																					FROM [MATERIAL_PROGRAMADO] (NOLOCK)
-																					WHERE SERIAL = SMPL.SERIAL))), 'N/E' )) END )  AS EVENTO_SIGUIENTE,
-			-- ===========================
-			--( CASE WHEN EVENTO_ACTUAL = 'FACTURADO' THEN 'FIN'
-			--		ELSE (	ISNULL(( SELECT TOP 1 D_KIT_RUTA_EVENTO
-			--				FROM KIT_RUTA (NOLOCK)
-			--				INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
-			--				WHERE KIT_RUTA.ITEM_NO = SMPL.ITEM_NO
-			--				AND KIT_RUTA.MODELNO = SMPL.MODEL_NO
-			--				AND KIT_RUTA.VERSIONNO = SMPL.VERSION_NO
-			--				AND KIT_RUTA.K_KIT_RUTA_EVENTO > (	SELECT TOP 1 K_TIPO_EVENTO_KIT 
-			--													FROM [MATERIAL_PROGRAMADO] (NOLOCK)
-			--													WHERE SERIAL = SMPL.SERIAL)), 'N/E' )) END )  AS EVENTO_SIGUIENTE,
+																					WHERE SERIAL = SMPL.SERIAL) , 10))), 'N/E' )) END )  AS EVENTO_SIGUIENTE,
 			-- ===========================
 			ISNULL(CONVERT(DATE, [MATERIAL_PROGRAMADO].F_EVENTO), CONVERT(DATE, GETDATE()))  AS F_EVENTO
 			-- ===========================
@@ -242,7 +231,7 @@ IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_SK_
 GO
 
 /*
- EXEC	[dbo].[PG_SK_ESTATUS_MATERIAL_PROGRAMADO_X_ORDEN] 0,0, '41026'
+ EXEC	[dbo].[PG_SK_ESTATUS_MATERIAL_PROGRAMADO_X_ORDEN] 0,0, '30719'
 */
 
 
@@ -299,7 +288,7 @@ AS
 	FROM ccjoblin_sql  (NOLOCK)
 	INNER JOIN ccjobhdr_sql (NOLOCK) ON ccjoblin_sql.jobno = ccjobhdr_sql.jobno 
 		AND status = 'P'
-		AND ccjobhdr_sql.JOBNO < 60000 -- ADD BY  RAFAELF 2022-01-11
+		--AND ccjobhdr_sql.JOBNO < 60000 -- ADD BY  RAFAELF 2022-01-11
 		--AND ccjobhdr_sql.JOBNO < 50000
 	-- ===========================
 	INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
@@ -328,9 +317,9 @@ AS
 												WHERE KIT_RUTA.ITEM_NO = SMPL.ITEM_NO
 												AND KIT_RUTA.MODELNO = SMPL.MODEL_NO
 												AND KIT_RUTA.VERSIONNO = SMPL.VERSION_NO
-												AND KIT_RUTA.K_KIT_RUTA_EVENTO = (	SELECT TOP 1 K_TIPO_EVENTO_KIT 
+												AND KIT_RUTA.K_KIT_RUTA_EVENTO = ISNULL( (	SELECT TOP 1 K_TIPO_EVENTO_KIT 
 																					FROM [MATERIAL_PROGRAMADO] (NOLOCK)
-																					WHERE SERIAL = SMPL.SERIAL))), 'N/E' )) END )  AS EVENTO_SIGUIENTE,
+																					WHERE SERIAL = SMPL.SERIAL) , 10))), 'N/E' )) END )  AS EVENTO_SIGUIENTE,
 			-- ===========================
 			ISNULL(CONVERT(DATE, [MATERIAL_PROGRAMADO].F_EVENTO), CONVERT(DATE, GETDATE()))  AS F_EVENTO
 			-- ===========================
