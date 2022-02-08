@@ -24,7 +24,7 @@ IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_LI_
 	DROP PROCEDURE [dbo].[PG_LI_MATERIAL_PROGRAMADO_ESCANEADO_X_ESTACION]
 GO
 /*
- EXEC	[dbo].[PG_LI_MATERIAL_PROGRAMADO_ESCANEADO_X_ESTACION] 0,0, 'LAMINACION', 'IT-010'
+ EXEC	[dbo].[PG_LI_MATERIAL_PROGRAMADO_ESCANEADO_X_ESTACION] 0,0, 'CERTIFICACION', 'QCPERF-002'
     
 */
 
@@ -44,7 +44,7 @@ AS
 				ELSE CONCAT(EP_NOMBRE, ' ', EP_APELLIDO_PATERNO) END ) AS RESPONSABLE,
 			CONVERT(VARCHAR,F_EVENTO, 20) AS F_EVENTO 
 	FROM [MATERIAL_PROGRAMADO] (NOLOCK)
-	INNER JOIN ccjoblin_sql (NOLOCK) ON LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ LTRIM(RTRIM(ser_no)),3) = SERIAL
+	INNER JOIN ccjoblin_sql (NOLOCK) ON LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(5),ser_no), 3) = SERIAL
 	LEFT JOIN HOWE.dbo.VISTA_GAFETES (NOLOCK) ON VISTA_GAFETES.EN_NUM_EMP = K_RESPONSABLE
 	WHERE USUARIO_EVENTO =  @PP_USUARIO_EVENTO
 	AND ESTACION = @PP_ESTACION
@@ -287,7 +287,7 @@ AS
 			-- ===========================
 	FROM ccjoblin_sql  (NOLOCK)
 	INNER JOIN ccjobhdr_sql (NOLOCK) ON ccjoblin_sql.jobno = ccjobhdr_sql.jobno 
-		AND status = 'P'
+		--AND status = 'P'
 		--AND ccjobhdr_sql.JOBNO < 60000 -- ADD BY  RAFAELF 2022-01-11
 		--AND ccjobhdr_sql.JOBNO < 50000
 	-- ===========================
@@ -297,6 +297,7 @@ AS
 													FROM	cccusitm_sql (NOLOCK)
 													WHERE	cccusitm_sql.Item_No = ccjoblin_sql.item_no  
 													AND		cccusitm_sql.cus_no = ccjoblin_sql.customer)
+	WHERE ccjobhdr_sql.JOBNO = @PP_ORDEN
 
 	-- ////////SE REALIZA EL SELECT FINAL////////////////////////////////////////
 	SELECT	SMPL.*,
@@ -550,7 +551,7 @@ IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_RPT
 	DROP PROCEDURE [dbo].[PG_RPT_MATERIAL_PROGRAMADO_ESCANEADO_X_EVENTO_TURNO]
 GO
 /*
- EXEC	[dbo].[PG_RPT_MATERIAL_PROGRAMADO_ESCANEADO_X_EVENTO_TURNO] 0,144,  '2021/07/05' , '2021/07/05' , '( TODOS )' , 400 , -1 -- CERTIFICACION
+ EXEC	[dbo].[PG_RPT_MATERIAL_PROGRAMADO_ESCANEADO_X_EVENTO_TURNO] 0,144,  '2022/02/08' , '2022/02/08' , '( TODOS )' , 400 , 1 -- CERTIFICACION
     
 */
 
@@ -587,8 +588,8 @@ AS
 		[MATERIAL_PROGRAMADO_LOG].ITEM_NO, 
 		LTRIM(RTRIM(cccusitm_sql.cus_item_no))	AS CUS_ITEM_NO,
 		SERIAL, 
-		2 AS CANTIDAD_PATRON,
-		CONVERT(INT,ccjoblin_sql.originalqty)	AS ORIGINAL_QTY, 
+		CONVERT(INT, CUBE_QTY_PER) AS CANTIDAD_PATRON,
+		CONVERT(INT, ccjoblin_sql.originalqty)	AS ORIGINAL_QTY, 
 		D_KIT_RUTA_EVENTO AS EVENTO, 
 		CONVERT(DATE,F_LOG) AS F_EVENTO,
 		( CASE WHEN FORMAT(CAST(F_LOG AS TIME(0)), N'hhmmss') > 2000 AND FORMAT(CAST(F_LOG AS TIME(0)), N'hhmmss')  < 60002  THEN 3
@@ -597,6 +598,7 @@ AS
 	FROM [MATERIAL_PROGRAMADO_LOG] (NOLOCK) 
 	INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON K_KIT_RUTA_EVENTO = K_TIPO_EVENTO_KIT
 	INNER JOIN ccjoblin_sql (NOLOCK) ON (LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3)) = SERIAL
+	INNER JOIN DATA_02.DBO.imitmidx_sql (NOLOCK) ON [MATERIAL_PROGRAMADO_LOG].ITEM_NO = imitmidx_sql.item_no
 	-- ===========================
 	INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
 	AND		ccjoblin_sql.customer = cccusitm_sql.cus_no

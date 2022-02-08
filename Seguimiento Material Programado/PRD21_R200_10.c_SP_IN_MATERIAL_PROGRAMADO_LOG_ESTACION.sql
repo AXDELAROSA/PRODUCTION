@@ -128,21 +128,36 @@ AS
 				-- APLICAR CAMBIO CUANDO SE ESTE IMPRIMIENDO LA ETIQUETA CON EL MODELO Y VERSION
 				DECLARE @VP_MODELO VARCHAR(10) =  LEFT(LTRIM(RTRIM(@VP_PRODUCT_CAT)), 3)
 
+				-- ///////SE VALIDA QUE NO EXISTA EL EVENTO//////////////////////////////////////////////
+				DECLARE @VP_N_EVENTO INT = 0
+				SELECT @VP_N_EVENTO =  COUNT([K_MATERIAL_PROGRAMADO_LOG])
+				FROM DATA_02.DBO.[MATERIAL_PROGRAMADO_LOG] (NOLOCK) 
+				WHERE SERIAL = @VP_SERIAL_1
+				AND K_TIPO_EVENTO_KIT = @VP_TIPO_EVENTO_KIT
+
+				IF @VP_N_EVENTO IS NULL
+					SET @VP_N_EVENTO = 0
+
+				IF @VP_N_EVENTO > 0
+					RAISERROR ('El serial ya fue escaneado en esta estación anteriormente!', 16, 1 ) --MENSAJE - Severity -State.
+
 				-- ///////SE OBTIENEN LOS DATOS DEL KIT PROGRAMADO//////////////////////////////////////////////
 				DECLARE @VP_ITEM_NO_PROGRAMADO VARCHAR(100) = ''
 				DECLARE @VP_VERSION VARCHAR(100) = ''
+
 				SELECT	@VP_ITEM_NO_PROGRAMADO = LTRIM(RTRIM(ccjoblin_sql.item_no)),
-						@VP_VERSION = LTRIM(RTRIM(cccusitm_sql.versionno))
+						--@VP_VERSION = LTRIM(RTRIM(cccusitm_sql.versionno))
+						@VP_VERSION = RIGHT(LTRIM(RTRIM(ChangeLevel)), 4)
 						-- ===========================
 				FROM ccjoblin_sql  (NOLOCK)
-				INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
-				AND		ccjoblin_sql.customer = cccusitm_sql.cus_no
-				AND		cccusitm_sql.versionno = (	SELECT	MAX(CONVERT(INT, versionno)) 
-																FROM	cccusitm_sql (NOLOCK)
-																WHERE	cccusitm_sql.Item_No = ccjoblin_sql.item_no  
-																AND		cccusitm_sql.cus_no = ccjoblin_sql.customer)
+				--INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
+				--AND		ccjoblin_sql.customer = cccusitm_sql.cus_no
+				--AND		cccusitm_sql.versionno = (	SELECT	MAX(CONVERT(INT, versionno)) 
+				--												FROM	cccusitm_sql (NOLOCK)
+				--												WHERE	cccusitm_sql.Item_No = ccjoblin_sql.item_no  
+				--												AND		cccusitm_sql.cus_no = ccjoblin_sql.customer)
 				-- ===========================
-				WHERE	 LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ LTRIM(RTRIM(ser_no)),3) = @VP_SERIAL_1
+				WHERE	 LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ LTRIM(RTRIM(ser_no)), 3) = @VP_SERIAL_1
 
 				IF @VP_ITEM_NO_PROGRAMADO IS NULL OR @VP_ITEM_NO_PROGRAMADO = ''
 					RAISERROR ('No fue posible obtener el Kit del serial en [ccjoblin_sql].', 16, 1 ) --MENSAJE - Severity -State.
@@ -193,69 +208,69 @@ AS
 						IF ( @VP_O_KIT_RUTA_EVENTO_ESCANEADO IS NULL OR @VP_O_KIT_RUTA_EVENTO_ESCANEADO = 0 )
 							RAISERROR ('El fue posible obtener el orden del Evento para el kit Escaneado.', 16, 1 ) --MENSAJE - Severity -State.
 
-						-- ///////SE OBTIENE EL EVENTO ACTUAL DEL KIT//////////////////////////////////////////////
-						DECLARE @VP_KIT_EVENTO_ACTUAL INT = 0
-						DECLARE @VP_D_KIT_EVENTO_ACTUAL VARCHAR(100) = ''
-						SELECT TOP 1 @VP_KIT_EVENTO_ACTUAL = K_TIPO_EVENTO_KIT,
-									 @VP_D_KIT_EVENTO_ACTUAL = D_KIT_RUTA_EVENTO
-						FROM [MATERIAL_PROGRAMADO_LOG]  (NOLOCK)
-						INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = [MATERIAL_PROGRAMADO_LOG].K_TIPO_EVENTO_KIT
-						WHERE SERIAL = @VP_SERIAL_1
-						ORDER BY K_MATERIAL_PROGRAMADO_LOG DESC
+						---- ///////SE OBTIENE EL EVENTO ACTUAL DEL KIT//////////////////////////////////////////////
+						--DECLARE @VP_KIT_EVENTO_ACTUAL INT = 0
+						--DECLARE @VP_D_KIT_EVENTO_ACTUAL VARCHAR(100) = ''
+						--SELECT TOP 1 @VP_KIT_EVENTO_ACTUAL = K_TIPO_EVENTO_KIT,
+						--			 @VP_D_KIT_EVENTO_ACTUAL = D_KIT_RUTA_EVENTO
+						--FROM [MATERIAL_PROGRAMADO_LOG]  (NOLOCK)
+						--INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = [MATERIAL_PROGRAMADO_LOG].K_TIPO_EVENTO_KIT
+						--WHERE SERIAL = @VP_SERIAL_1
+						--ORDER BY K_MATERIAL_PROGRAMADO_LOG DESC
 
-						IF ( @VP_KIT_EVENTO_ACTUAL IS NULL OR @VP_KIT_EVENTO_ACTUAL = 0 )
-							RAISERROR ('No fue posible obtener el evento Actual del kit.', 16, 1 ) --MENSAJE - Severity -State.
+						--IF ( @VP_KIT_EVENTO_ACTUAL IS NULL OR @VP_KIT_EVENTO_ACTUAL = 0 )
+						--	RAISERROR ('No fue posible obtener el evento Actual del kit.', 16, 1 ) --MENSAJE - Severity -State.
 
-						-- ///////SE OBTIENE EL ORDEN DEL EVENTO ACTUAL DEL KIT//////////////////////////////////////////////
-						DECLARE @VP_O_KIT_RUTA_EVENTO_ACTUAL INT = 0
-						SELECT @VP_O_KIT_RUTA_EVENTO_ACTUAL = O_KIT_RUTA_EVENTO
-						FROM KIT_RUTA (NOLOCK)
-						WHERE ITEM_NO = @VP_ITEM_NO_PROGRAMADO
-						AND MODELNO = @VP_MODELO -- @VP_PRODUCT_CAT
-						AND VERSIONNO = @VP_VERSION
-						AND K_KIT_RUTA_EVENTO =  @VP_KIT_EVENTO_ACTUAL
+						---- ///////SE OBTIENE EL ORDEN DEL EVENTO ACTUAL DEL KIT//////////////////////////////////////////////
+						--DECLARE @VP_O_KIT_RUTA_EVENTO_ACTUAL INT = 0
+						--SELECT @VP_O_KIT_RUTA_EVENTO_ACTUAL = O_KIT_RUTA_EVENTO
+						--FROM KIT_RUTA (NOLOCK)
+						--WHERE ITEM_NO = @VP_ITEM_NO_PROGRAMADO
+						--AND MODELNO = @VP_MODELO -- @VP_PRODUCT_CAT
+						--AND VERSIONNO = @VP_VERSION
+						--AND K_KIT_RUTA_EVENTO =  @VP_KIT_EVENTO_ACTUAL
 
-						IF ( @VP_O_KIT_RUTA_EVENTO_ACTUAL IS NULL OR @VP_O_KIT_RUTA_EVENTO_ACTUAL = 0 )
-							RAISERROR ('El fue posible obtener el orden del Evento Actual.', 16, 1 ) --MENSAJE - Severity -State.
+						--IF ( @VP_O_KIT_RUTA_EVENTO_ACTUAL IS NULL OR @VP_O_KIT_RUTA_EVENTO_ACTUAL = 0 )
+						--	RAISERROR ('El fue posible obtener el orden del Evento Actual.', 16, 1 ) --MENSAJE - Severity -State.
 
-						-- ///////SE OBTIENE EL EVENTO SIGUIENTE DEL KIT//////////////////////////////////////////////
-						DECLARE @VP_O_KIT_RUTA_EVENTO_SIGUIENTE INT = 0
-						DECLARE @VP_KIT_EVENTO_SIGUIENTE INT = 0
-						DECLARE @VP_D_KIT_EVENTO_SIGUIENTE VARCHAR(100) = ''
+						---- ///////SE OBTIENE EL EVENTO SIGUIENTE DEL KIT//////////////////////////////////////////////
+						--DECLARE @VP_O_KIT_RUTA_EVENTO_SIGUIENTE INT = 0
+						--DECLARE @VP_KIT_EVENTO_SIGUIENTE INT = 0
+						--DECLARE @VP_D_KIT_EVENTO_SIGUIENTE VARCHAR(100) = ''
 
-						SELECT TOP 1 @VP_KIT_EVENTO_SIGUIENTE =  KIT_RUTA.K_KIT_RUTA_EVENTO,
-									 @VP_D_KIT_EVENTO_SIGUIENTE = D_KIT_RUTA_EVENTO,
-									 @VP_O_KIT_RUTA_EVENTO_SIGUIENTE = KIT_RUTA.O_KIT_RUTA_EVENTO
-						FROM KIT_RUTA (NOLOCK)
-						INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
-						WHERE ITEM_NO = @VP_ITEM_NO_PROGRAMADO
-						AND MODELNO = @VP_MODELO -- @VP_PRODUCT_CAT
-						AND VERSIONNO = @VP_VERSION
-						AND KIT_RUTA.O_KIT_RUTA_EVENTO >  @VP_O_KIT_RUTA_EVENTO_ACTUAL
+						--SELECT TOP 1 @VP_KIT_EVENTO_SIGUIENTE =  KIT_RUTA.K_KIT_RUTA_EVENTO,
+						--			 @VP_D_KIT_EVENTO_SIGUIENTE = D_KIT_RUTA_EVENTO,
+						--			 @VP_O_KIT_RUTA_EVENTO_SIGUIENTE = KIT_RUTA.O_KIT_RUTA_EVENTO
+						--FROM KIT_RUTA (NOLOCK)
+						--INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
+						--WHERE ITEM_NO = @VP_ITEM_NO_PROGRAMADO
+						--AND MODELNO = @VP_MODELO -- @VP_PRODUCT_CAT
+						--AND VERSIONNO = @VP_VERSION
+						--AND KIT_RUTA.O_KIT_RUTA_EVENTO >  @VP_O_KIT_RUTA_EVENTO_ACTUAL
 
-						IF ( @VP_KIT_EVENTO_SIGUIENTE IS NULL OR @VP_KIT_EVENTO_SIGUIENTE = 0 )
-							RAISERROR ('No fue posible obtener el evento siguiente del kit.', 16, 1 ) --MENSAJE - Severity -State.
+						--IF ( @VP_KIT_EVENTO_SIGUIENTE IS NULL OR @VP_KIT_EVENTO_SIGUIENTE = 0 )
+						--	RAISERROR ('No fue posible obtener el evento siguiente del kit.', 16, 1 ) --MENSAJE - Severity -State.
 
-						IF @VP_O_KIT_RUTA_EVENTO_ESCANEADO > @VP_O_KIT_RUTA_EVENTO_SIGUIENTE 
-							IF @AUTORIZAR_EVENTO_DIFERENTE = 0
-								BEGIN
-									SET @VP_MENSAJE_TRANSACCION = 'El kit se encuentra en: ' + @VP_D_KIT_EVENTO_ACTUAL + ' y tiene eventos pendientes, autoriza que los eventos anteriores se realizarón?'
-									RAISERROR (@VP_MENSAJE_TRANSACCION, 16, 1 ) --MENSAJE - Severity -State.
-								END
+						----IF @VP_O_KIT_RUTA_EVENTO_ESCANEADO > @VP_O_KIT_RUTA_EVENTO_SIGUIENTE 
+						----	IF @AUTORIZAR_EVENTO_DIFERENTE = 0
+						----		BEGIN
+						----			SET @VP_MENSAJE_TRANSACCION = 'El kit se encuentra en: ' + @VP_D_KIT_EVENTO_ACTUAL + ' y tiene eventos pendientes, autoriza que los eventos anteriores se realizarón?'
+						----			RAISERROR (@VP_MENSAJE_TRANSACCION, 16, 1 ) --MENSAJE - Severity -State.
+						----		END
 
-						IF @VP_O_KIT_RUTA_EVENTO_ESCANEADO < @VP_O_KIT_RUTA_EVENTO_ACTUAL 
-							BEGIN
-								--DECLARE @VP_D_KIT_EVENTO_ANTERIOR VARCHAR(100) = ''
-								--SELECT @VP_D_KIT_EVENTO_ANTERIOR =  D_KIT_RUTA_EVENTO
-								--FROM KIT_RUTA_EVENTO (NOLOCK)
-								--WHERE K_KIT_RUTA_EVENTO = @VP_TIPO_EVENTO_KIT
+						--IF @VP_O_KIT_RUTA_EVENTO_ESCANEADO < @VP_O_KIT_RUTA_EVENTO_ACTUAL 
+						--	BEGIN
+						--		--DECLARE @VP_D_KIT_EVENTO_ANTERIOR VARCHAR(100) = ''
+						--		--SELECT @VP_D_KIT_EVENTO_ANTERIOR =  D_KIT_RUTA_EVENTO
+						--		--FROM KIT_RUTA_EVENTO (NOLOCK)
+						--		--WHERE K_KIT_RUTA_EVENTO = @VP_TIPO_EVENTO_KIT
 
-								IF @AUTORIZAR_EVENTO_DIFERENTE = 0
-									BEGIN
-										SET @VP_MENSAJE_TRANSACCION = 'El kit se encuentra en: ' + @VP_D_KIT_EVENTO_ACTUAL + ', desea regresarlo al evento: ' + @VP_D_KIT_EVENTO_ESCANEADO + '?'
-										RAISERROR (@VP_MENSAJE_TRANSACCION, 16, 1 ) --MENSAJE - Severity -State.
-									END
-							END
+						--		IF @AUTORIZAR_EVENTO_DIFERENTE = 0
+						--			BEGIN
+						--				SET @VP_MENSAJE_TRANSACCION = 'El kit se encuentra en: ' + @VP_D_KIT_EVENTO_ACTUAL + ', desea regresarlo al evento: ' + @VP_D_KIT_EVENTO_ESCANEADO + '?'
+						--				RAISERROR (@VP_MENSAJE_TRANSACCION, 16, 1 ) --MENSAJE - Severity -State.
+						--			END
+						--	END
 					END
 
 				-- ///////SE GUARDA EL REGISTRO DEL MATERIAL ESCANEADO//////////////////////////////////////////////		
