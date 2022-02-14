@@ -14,6 +14,7 @@ GO
 -- ///////			CONTENIDO DEL SP
 --	[PG_LI_ORDEN_TRABAJO]
 --	[PG_SK_ORDEN_TRABAJO]
+--	[PG_SK_BUSCAR_EMPLEADO]
 --	[PG_IN_ORDEN_TRABAJO]
 --	[PG_UP_ORDEN_TRABAJO]
 --	[PG_UP_ESTATUS_ORDEN_TRABAJO]
@@ -153,6 +154,31 @@ GO
 
 -- //////////////////////////////////////////////////////////////
 -- // STORED PROCEDURE ---> SELECT / FICHA
+-- //////////////////////////////////////////////////////////////
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_SK_BUSCAR_EMPLEADO]') AND type in (N'P', N'PC'))
+	DROP PROCEDURE [dbo].[PG_SK_BUSCAR_EMPLEADO]
+GO
+--		 EXECUTE [dbo].[PG_SK_BUSCAR_EMPLEADO] 0,139,13164
+--		 EXECUTE [dbo].[PG_SK_BUSCAR_EMPLEADO] 0,139,12349
+CREATE PROCEDURE [dbo].[PG_SK_BUSCAR_EMPLEADO]
+	@PP_K_SISTEMA_EXE				INT,
+	@PP_K_USUARIO_ACCION			INT,
+	-- ===========================
+	@PP_K_EMPLEADO_PEARL			INT
+AS
+--	DECLARE @VP_MENSAJE				VARCHAR(300) = ''	
+	SELECT	TOP  (1)
+			EN_NUM_EMP	AS EMPLEADO,
+			EP_NOMBRE	AS D_EMPLEADO,
+			EP_NOMBRE + ' ' + EP_APELLIDO_PATERNO AS NOMBRE_APELLIDOP
+	FROM	HOWE.DBO.VISTA_GAFETES		(NOLOCK)
+	WHERE	EN_NUM_EMP				= @PP_K_EMPLEADO_PEARL
+
+GO
+
+
+-- //////////////////////////////////////////////////////////////
+-- // STORED PROCEDURE ---> SELECT / FICHA
 -- //		PARA MOSTRAR EL DETALLE DE LOS DADOS EN LA ORDEN
 -- //		DE MANTENIMIENTO.
 -- //////////////////////////////////////////////////////////////
@@ -253,13 +279,15 @@ DECLARE  @VP_MENSAJE				NVARCHAR(MAX)	= ''
 BEGIN TRANSACTION 
 BEGIN TRY
 	-- /////////////////////////////////////////////////////////////////////
-	IF ( (	SELECT	CONCAT(K_USUARIO_DEPARTAMENTO,'-',K_CLASE_DEPARTAMENTO) 
-			FROM	BD_GENERAL.DBO.USUARIO_PEARL (NOLOCK) 
-			WHERE	K_USUARIO_PEARL	= @PP_K_USUARIO_ACCION	) = '5-2' )
-	BEGIN
-		SET @VP_MENSAJE='Los usuarios de mantenimiento no pueden generar una orden de trabajo.'
-		RAISERROR (@VP_MENSAJE, 16, 1 ) 
-	END
+	----	SE QUITA LA VALIDACIÓN A SOLICITUD DE OMAR G., YA QUE COMENTÓ QUE SI JHOLGUIN LE SOLICITA REALIZAR UNA ACCIÓN, ÉL NO REALIZARÁ LA GENERACIÓN DE LA ORDEN
+	----	LA CAPTURARÁ DIRECTAMENTE EL DEPARTAMENTO DE MANTENIMIENTO.			AX: 20220214
+	--IF ( (	SELECT	CONCAT(K_USUARIO_DEPARTAMENTO,'-',K_CLASE_DEPARTAMENTO) 
+	--		FROM	BD_GENERAL.DBO.USUARIO_PEARL (NOLOCK) 
+	--		WHERE	K_USUARIO_PEARL	= @PP_K_USUARIO_ACCION	) = '5-2' )
+	--BEGIN
+	--	SET @VP_MENSAJE='Los usuarios de mantenimiento no pueden generar una orden de trabajo.'
+	--	RAISERROR (@VP_MENSAJE, 16, 1 ) 
+	--END
 	-- /////////////////////////////////////////////////////////////////////
 	IF @PP_D_ORDEN_TRABAJO	= ''
 	BEGIN
@@ -401,13 +429,15 @@ DECLARE  @VP_MENSAJE				NVARCHAR(MAX)	= ''
 BEGIN TRANSACTION 
 BEGIN TRY
 	-- /////////////////////////////////////////////////////////////////////
-	IF ( (	SELECT	CONCAT(K_USUARIO_DEPARTAMENTO,'-',K_CLASE_DEPARTAMENTO) 
-			FROM	BD_GENERAL.DBO.USUARIO_PEARL (NOLOCK) 
-			WHERE	K_USUARIO_PEARL	= @PP_K_USUARIO_ACCION	) = '5-2' )	---	AND		@PP_K_STATUS_ORDEN_TRABAJO NOT IN ()
-	BEGIN
-		SET @VP_MENSAJE='Los usuarios de mantenimiento no pueden actulizar una orden de trabajo.'
-		RAISERROR (@VP_MENSAJE, 16, 1 ) 
-	END
+	----	SE QUITA LA VALIDACIÓN A SOLICITUD DE OMAR G., YA QUE COMENTÓ QUE SI JHOLGUIN LE SOLICITA REALIZAR UNA ACCIÓN, ÉL NO REALIZARÁ LA GENERACIÓN DE LA ORDEN
+	----	LA CAPTURARÁ DIRECTAMENTE EL DEPARTAMENTO DE MANTENIMIENTO.			AX: 20220214
+	--IF ( (	SELECT	CONCAT(K_USUARIO_DEPARTAMENTO,'-',K_CLASE_DEPARTAMENTO) 
+	--		FROM	BD_GENERAL.DBO.USUARIO_PEARL (NOLOCK) 
+	--		WHERE	K_USUARIO_PEARL	= @PP_K_USUARIO_ACCION	) = '5-2' )	---	AND		@PP_K_STATUS_ORDEN_TRABAJO NOT IN ()
+	--BEGIN
+	--	SET @VP_MENSAJE='Los usuarios de mantenimiento no pueden actulizar una orden de trabajo.'
+	--	RAISERROR (@VP_MENSAJE, 16, 1 ) 
+	--END
 	-- /////////////////////////////////////////////////////////////////////
 	IF @PP_D_ORDEN_TRABAJO	= ''
 	BEGIN
