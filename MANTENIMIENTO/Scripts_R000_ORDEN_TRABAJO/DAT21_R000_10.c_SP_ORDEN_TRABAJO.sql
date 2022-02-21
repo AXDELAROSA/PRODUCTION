@@ -1498,7 +1498,7 @@ AS
 	SET @VP_BODY_HTML =  
 	N'<p style="color:black; font-size:12.0pt;font-family:"Calisto MT",serif">'+
 	N'Buen día, se ha realizado una solicitud de orden de trabajo.<br>'+
-	N'El registro ya se encuentra generado con el estatus de [ENVIADA] para le sea asignado un técnico. Favor de realizar el seguimiento correspondiente.<br><br>'+
+	N'El registro ya se encuentra generado con el estatus de [ENVIADA] para que le sea asignado un técnico. Favor de realizar el seguimiento correspondiente.<br><br>'+
 	N'Este correo fue generado automáticamente por el sistema PEARL.<br><br>'+
 	N'Saludos.<br> == = == = == = == = == = == = == = == = == = == = == = == = == = == = ==<br></p> <p>'
 	
