@@ -220,6 +220,166 @@ GO
 
 
 
+-- //////////////////////////////////////////////////////////////
+-- // STORED PROCEDURE ---> SELECT / LISTADO
+-- //////////////////////////////////////////////////////////////
+-- USE DATA_02
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN_V2]') AND type in (N'P', N'PC'))
+	DROP PROCEDURE [dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN_V2]
+GO
+
+/*												  
+ EXEC	[dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN_V2] 0,0, '', '( TODOS )', '( TODOS )', '( TODOS )', '( TODOS )'
+*/
+
+CREATE PROCEDURE [dbo].[PG_LI_ESTATUS_X_SERIAL_ORDEN_V2]
+	@PP_K_SISTEMA_EXE				INT,
+	@PP_K_USUARIO_ACCION			INT,
+	-- ===========================
+	@PP_BUSCAR						VARCHAR(150),
+	@PP_CLIENTE						VARCHAR(50),
+	@PP_COLOR						VARCHAR(50),
+	@PP_MESA						VARCHAR(50),
+	@PP_EVENTO_ACTUAL				VARCHAR(100)
+AS
+
+	-- ///////CUANDO SE ESCANEA EL SERIAL DE LA ETIQUE TRAE LA S AL PRINCIPIO CON ESTO SE ELIMINA///////////////////////////////////////////////////////
+	IF SUBSTRING(@PP_BUSCAR, 1, 1) = 'S'
+		SET @PP_BUSCAR = SUBSTRING(@PP_BUSCAR, 2 , LEN(@PP_BUSCAR))
+
+	-- ///////SE DECLARAN VARIABLES A USARSE////////////////////////////////////
+	DECLARE @VP_PART_NO				VARCHAR(50) = '' 
+	DECLARE @VP_QTY					VARCHAR(50) = '' 
+	DECLARE @VP_SERIAL_1			VARCHAR(50) = '' 
+	DECLARE @VP_SERIAL_2			VARCHAR(50) = '' 
+	DECLARE @VP_CUSTNO				VARCHAR(50) = '' 
+	DECLARE @VP_CLIENTE				VARCHAR(50) = ''
+	DECLARE @VP_PRODUCT_CAT			VARCHAR(50) = '' 
+	DECLARE @VP_LOTE_1				VARCHAR(50) = '' 
+	DECLARE @VP_LOTE_2				VARCHAR(50) = '' 
+
+	IF LEN(@PP_BUSCAR) > 29
+		BEGIN
+			EXECUTE [dbo].[PG_GET_DATO_ETIQUETA_KIT]	@PP_K_SISTEMA_EXE, @PP_K_USUARIO_ACCION,
+														@PP_BUSCAR,
+														@OU_PART_NO		 =	@VP_PART_NO			OUTPUT,
+														@OU_QTY			 =	@VP_QTY				OUTPUT,
+														@OU_SERIAL_1	 =	@VP_SERIAL_1		OUTPUT,
+														@OU_SERIAL_2	 =	@VP_SERIAL_2		OUTPUT,
+														@OU_CUSTNO		 =  @VP_CUSTNO			OUTPUT,
+														@OU_CLIENTE		 =  @VP_CLIENTE			OUTPUT,
+														@OU_PRODUCT_CAT	 =  @VP_PRODUCT_CAT 	OUTPUT,
+														@OU_LOTE_1		 =  @VP_LOTE_1			OUTPUT,
+														@OU_LOTE_2		 =  @VP_LOTE_2			OUTPUT	
+
+			SET @PP_BUSCAR = @VP_SERIAL_1
+		END
+
+	-- ///////SE CREA TABLA TEMPORAL PARA GUARDAR DATOS DEL PRIMER SELECT///////////////////////////////////////////////////////
+	DECLARE @TBL_SEGUIMIENTO_MATERIAL_PROGRAMADO_LOG AS TABLE(
+			JOBNO				VARCHAR(50),
+			SER_NO				INT,
+			SERIAL				VARCHAR(50),
+			KIT_DESC			VARCHAR(255),
+			ORIGINAL_QTY		INT,
+			CUSTOMER			VARCHAR(50),
+			COLOR				VARCHAR(50),
+			ITEM_NO				VARCHAR(100),
+			CUS_ITEM_NO			VARCHAR(100),
+			MODEL_NO			VARCHAR(100),
+			VERSION_NO			VARCHAR(100),
+			MESA				VARCHAR(100),
+			F_CREACION			DATE,
+			EVENTO_ACTUAL		VARCHAR(100)
+	)
+
+	-- //////////SE INGRESAN LOS DATOS A LA TABLA TEMPORAL////////////////////////////////////////////////////
+	INSERT INTO @TBL_SEGUIMIENTO_MATERIAL_PROGRAMADO_LOG
+	SELECT	LTRIM(RTRIM(ccjoblin_sql.jobno))		AS JOBNO, 
+			Ser_No,
+			-- ===========================
+			LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3) AS SERIAL,
+			-- ===========================
+			LTRIM(RTRIM(ccjoblin_sql.kitdesc))		AS KIT_DESC, 
+			CONVERT(INT,ccjoblin_sql.originalqty)	AS ORIGINAL_QTY, 
+			LTRIM(RTRIM(ccjoblin_sql.customer))		AS CUSTOMER, 
+			CONCAT('F', LTRIM(RTRIM(ccjobhdr_sql.colour)))		AS COLOR, 
+			-- ===========================
+			LTRIM(RTRIM(ccjoblin_sql.item_no))		AS ITEM_NO,
+			-- ===========================
+			LTRIM(RTRIM(cccusitm_sql.cus_item_no))	AS CUS_ITEM_NO,
+			LTRIM(RTRIM(cccusitm_sql.modelno))		AS MODEL_NO,
+			LTRIM(RTRIM(cccusitm_sql.versionno))	AS VERSION_NO,
+			LTRIM(RTRIM(MACHINE))					AS MESA,
+			[dbo].[CONVERT_INT_TO_DATE](ccjobhdr_sql.datecreated) AS F_CREACION,
+			-- ===========================
+			ISNULL((	SELECT D_KIT_RUTA_EVENTO
+						FROM [MATERIAL_PROGRAMADO] (NOLOCK)
+						INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = [MATERIAL_PROGRAMADO].K_TIPO_EVENTO_KIT
+						WHERE SERIAL = LTRIM(RTRIM(ccjoblin_sql.jobno)) + RIGHT('000'+ CONVERT(VARCHAR(10),ser_no), 3)), 'MATERIALES') AS EVENTO_ACTUAL
+			-- ===========================
+	FROM ccjoblin_sql  (NOLOCK)
+	INNER JOIN ccjobhdr_sql (NOLOCK) ON ccjoblin_sql.jobno = ccjobhdr_sql.jobno 
+		AND status = 'P'
+	-- ===========================
+	INNER JOIN	cccusitm_sql (NOLOCK) ON ccjoblin_sql.Item_No = cccusitm_sql.item_no 
+	AND		ccjoblin_sql.customer = cccusitm_sql.cus_no
+	AND		cccusitm_sql.versionno = (	SELECT	MAX(CONVERT(INT, versionno)) 
+													FROM	cccusitm_sql (NOLOCK)
+													WHERE	cccusitm_sql.Item_No = ccjoblin_sql.item_no  
+													AND		cccusitm_sql.cus_no = ccjoblin_sql.customer)
+
+	-- ////////SE REALIZA EL SELECT FINAL////////////////////////////////////////
+	SELECT	SMPL.*,
+			-- ===========================
+			ISNULL(UPPER([MATERIAL_PROGRAMADO].ITEM_NO), 'N/E')  AS ITEM_NO_ETIQUETA,
+			-- ===========================
+			( CASE WHEN EVENTO_ACTUAL = 'FACTURADO' THEN 'FIN'
+				ELSE (	SELECT ISNULL(( SELECT TOP 1  D_KIT_RUTA_EVENTO
+										FROM KIT_RUTA (NOLOCK)
+										INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
+										WHERE KIT_RUTA.ITEM_NO = SMPL.ITEM_NO
+										AND KIT_RUTA.MODELNO = SMPL.MODEL_NO
+										AND KIT_RUTA.VERSIONNO = SMPL.VERSION_NO
+										AND KIT_RUTA.O_KIT_RUTA_EVENTO > (	SELECT  KIT_RUTA.O_KIT_RUTA_EVENTO
+																			FROM KIT_RUTA (NOLOCK)
+																			INNER JOIN KIT_RUTA_EVENTO (NOLOCK) ON KIT_RUTA_EVENTO.K_KIT_RUTA_EVENTO = KIT_RUTA.K_KIT_RUTA_EVENTO
+																			WHERE KIT_RUTA.ITEM_NO = SMPL.ITEM_NO
+																			AND KIT_RUTA.MODELNO = SMPL.MODEL_NO
+																			AND KIT_RUTA.VERSIONNO = SMPL.VERSION_NO
+																			AND KIT_RUTA.K_KIT_RUTA_EVENTO = ISNULL((	SELECT TOP 1 K_TIPO_EVENTO_KIT 
+																														FROM [MATERIAL_PROGRAMADO] (NOLOCK)
+																														WHERE SERIAL = SMPL.SERIAL) , 10))), 'N/E' )) END )  AS EVENTO_SIGUIENTE,
+			-- ===========================
+			ISNULL(CONVERT(DATE, [MATERIAL_PROGRAMADO].F_EVENTO), CONVERT(DATE, GETDATE()))  AS F_EVENTO
+			-- ===========================
+	FROM @TBL_SEGUIMIENTO_MATERIAL_PROGRAMADO_LOG AS SMPL
+	LEFT JOIN  [MATERIAL_PROGRAMADO] (NOLOCK) ON SMPL.SERIAL = [MATERIAL_PROGRAMADO].SERIAL
+	-- ===========================
+	WHERE EVENTO_ACTUAL  = ( CASE WHEN @PP_EVENTO_ACTUAL <> '( TODOS )' THEN @PP_EVENTO_ACTUAL
+								ELSE EVENTO_ACTUAL END )
+	-- ===========================
+	AND	(	SMPL.JOBNO				LIKE '%'+@PP_BUSCAR+'%'
+			OR	SMPL.CUS_ITEM_NO	LIKE '%'+@PP_BUSCAR+'%' 
+			OR	SMPL.ITEM_NO		LIKE '%'+@PP_BUSCAR+'%'
+			OR	SMPL.MODEL_NO		LIKE '%'+@PP_BUSCAR+'%'
+			OR SMPL.SERIAL			LIKE '%'+@PP_BUSCAR+'%' )
+	-- ===========================
+	AND SMPL.CUSTOMER = ( CASE WHEN @PP_CLIENTE <> '( TODOS )' THEN @PP_CLIENTE
+							ELSE SMPL.CUSTOMER END )
+	-- ===========================
+	AND SMPL.COLOR = ( CASE WHEN @PP_COLOR <> '( TODOS )' THEN @PP_COLOR
+							ELSE SMPL.COLOR END )
+	-- ===========================
+	AND SMPL.MESA = ( CASE WHEN @PP_MESA <> '( TODOS )' THEN @PP_MESA
+						ELSE SMPL.MESA END )
+	-- ===========================
+	ORDER BY JOBNO, SER_NO
+	-- ////////////////////////////////////////////////
+GO
+
+
+
 
 
 -- //////////////////////////////////////////////////////////////
