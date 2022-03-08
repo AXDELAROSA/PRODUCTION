@@ -330,7 +330,23 @@ AS
 													AND		cccusitm_sql.cus_no = ccjoblin_sql.customer)
 
 	-- ////////SE REALIZA EL SELECT FINAL////////////////////////////////////////
-	SELECT	SMPL.*,
+	SELECT	--SMPL.*,
+			JOBNO,			
+			SER_NO,				
+			SMPL.SERIAL AS SERIAL,				
+			KIT_DESC,			
+			ORIGINAL_QTY,		
+			CUSTOMER,			
+			COLOR,				
+			SMPL.ITEM_NO AS ITEM_NO,				
+			CUS_ITEM_NO,			
+			MODEL_NO,			
+			VERSION_NO,			
+			MESA,				
+			F_CREACION,			
+			--EVENTO_ACTUAL,		
+			( CASE WHEN EVENTO_ACTUAL = 'CERTIFICACION' AND ESTACION = 'QCPERF-002' THEN 'ENT. CERTI.'
+						ELSE EVENTO_ACTUAL END ) AS EVENTO_ACTUAL,
 			-- ===========================
 			ISNULL(UPPER([MATERIAL_PROGRAMADO].ITEM_NO), 'N/E')  AS ITEM_NO_ETIQUETA,
 			-- ===========================
