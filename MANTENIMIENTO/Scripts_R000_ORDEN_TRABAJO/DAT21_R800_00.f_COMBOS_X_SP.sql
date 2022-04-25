@@ -72,7 +72,7 @@ AS
 				) +		TA_D_CATALOGO 
 			) AS D_COMBOBOX
 	FROM	@VP_TA_CATALOGO
-	ORDER BY TA_D_CATALOGO ,	TA_O_CATALOGO
+	ORDER BY TA_O_CATALOGO	--TA_D_CATALOGO ,	
 	-- ////////////////////////////////////////////////////
 GO
 
